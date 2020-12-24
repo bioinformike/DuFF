@@ -1,0 +1,81 @@
+# yaml file setting up command line arg parsing using clap-rs.
+
+name: dupe_finder
+version: "1.0.0"
+about: An application to find duplicate files on a filesystem.
+author: Mike Lape <lapema@mail.uc.edu>
+
+args:
+  - dir:
+      help: Specify the directories you want to search as a comma separated list
+      short: d
+      long: dir
+      multiple: false
+      takes_value: true
+      required: true
+
+  - size:
+      help: How large do files have to be to check? (default > 250M)
+      short: s
+      long: size
+      multiple: false
+      takes_value: true
+
+  - work_dir:
+      help: Where script should store intermediate data
+      short: f
+      long: file
+      multiple: false
+      takes_value: true
+
+  - jobs:
+      help: Number of cores you'd like to use
+      short: j
+      long: jobs
+      multiple: false
+      takes_value: true
+
+  - exts:
+      help: Specify the file extensions you want to search for as comma separated list
+      short: e
+      long: ext
+      multiple: false
+      takes_value: true
+
+  - hash:
+      help: Path to file containing previously computed Blake3 16 byte hashes
+      short: x
+      long: hash
+      multiple: false
+      takes_value: true
+
+  - resume:
+      help: >-
+        Path to a previous working file (see 'debug' option).
+        The program will skip directly to hash calculation, assuming
+        all duplicate files are enumerated in the input working file.
+      short: r
+      long: resume
+      multiple: false
+      takes_value: true
+
+  - archive:
+      help: Save hash file for future use
+      short: a
+      long: archive
+      multiple: false
+      takes_value: false
+
+  - debug:
+      help: Do not clean up working files
+      short: z
+      long: debug
+      multiple: false
+      takes_value: false
+
+  - prog:
+      help: Show progress
+      short: p
+      long: progress
+      multiple: false
+      takes_value: false

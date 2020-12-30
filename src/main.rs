@@ -6,11 +6,11 @@ use std::fs::FileType;
 use std::fs;
 use jwalk::WalkDirGeneric;
 use rayon::ThreadPoolBuilder;
-use std::{thread, time};
 
 use crossbeam::crossbeam_channel::unbounded;
 use std::path::Path;
-
+use crossbeam::queue;
+use crossbeam::thread;
 use std::fs::File;
 use std::io::{BufReader, Read, Error};
 use threadpool::ThreadPool;
@@ -40,7 +40,7 @@ fn is_good_ext(curr_dir: &Path, curr_exts: &Vec<String>) -> bool {
 
 fn main()   {
 
-    let pool = ThreadPool::new(5);
+//    let pool = ThreadPool::new(5);
 
     let yams = load_yaml!("../dupe_args.yml");
     let matches = App::from(yams).get_matches();
@@ -50,11 +50,68 @@ fn main()   {
 
     println!("conf: {:?}", conf);
 
-    let curr_dir = &conf.search_path[0];
+    let mut q = queue::SegQueue::new();
 
-    println!("Searching {}", curr_dir);
+    // Load up our initial dirs onto the queue
+    for x in conf.search_path {
 
-    let walker = WalkDir::new(curr_dir);
+
+        q.push((Box::new(x)));
+        //let curr_x = x.clone();
+        //let curr_dir = Path::new(&curr_x);
+        //q.push(curr_dir);
+    }
+
+    for x in 0..conf.jobs {
+        crossbeam::scope(|s| {
+            s.spawn(move |_| {
+                let local_dir = String::from(q.pop().unwrap().as_str());
+                //let local_dir = q.pop().unwrap().as_str();
+                println!("Hello, {}!", local_dir);
+            });
+        }).unwrap();
+    }
+     /*   let curr_dir = x;
+
+        println!("Searching {}", curr_dir);
+
+        let curr_dir = Path::new(&curr_dir);
+
+        // It's a directory!
+        if curr_dir.is_dir() {
+            let contents = match curr_dir.read_dir() {
+                Ok(f) => f,
+                Err(e) => {
+                    println!("Error reading dir contents! [{}] {}", e, curr_dir.to_str().unwrap());
+                    continue
+                }
+            };
+
+
+            // Otherwise it's a file!
+        } else {
+
+            // Before pulling any info, let's make sure this file has extension we want
+            if !is_good_ext(curr_dir, &conf.exts) {
+
+                let meta = match curr_dir.metadata() {
+                    Ok(f) => f,
+                    Err(e) => {
+                        println!("Error getting meta! [{}] {}", e, curr_dir.to_str().unwrap());
+                        continue
+                    }
+                };
+
+                let fs = meta.len();
+
+                println!("[{}] {}", fs, curr_dir.to_str().unwrap());
+            }
+        }
+    }
+*/
+
+
+ /*   let walker = WalkDir::new(curr_dir);
 
     for entry in walker {
         let curr_en = match entry {
@@ -103,7 +160,7 @@ fn main()   {
 
 
 
-    }
+    }*/
 
     /*for entry in WalkDir::new(curr_dir)
             .follow_links(true)

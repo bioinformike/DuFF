@@ -2,7 +2,8 @@
 
 name: dupe_finder
 version: "1.0.0"
-about: An application to find duplicate files on a filesystem.
+about: "An application to find duplicate files on a filesystem. \n
+       [Report bugs at https://github.com/bioinformike/dupe_finder/issues]"
 author: Mike Lape <lapema@mail.uc.edu>
 
 args:

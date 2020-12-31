@@ -1,13 +1,15 @@
 [package]
 name = "dupe_finder"
 version = "0.1.0"
-authors = ["Mike Lape <Lapema@mail.uc.edu>"]
+authors = ["Mike Lape <MikeLape@Gmail.com>"]
+description = "An application to find duplicate files on a filesystem. \n [Report bugs at https://github.com/bioinformike/dupe_finder/issues]"
+repository = "https://github.com/bioinformike/dupe_finder"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "2", features = ["yaml"] }
+clap = { version = "2", features = ["yaml", "wrap_help"] }
 globwalk = "*"
 walkdir = "2"
 jwalk = "*"

@@ -8,7 +8,7 @@ to use to learn it!
 
 Left to implement:
 - [x] Include GH issues in program help.
-- [ ] Program is not ending after walking dir structure - likely has to do with error matching logic in run fn.
+- [x] Program is not ending after walking dir structure - likely has to do with error matching logic in run fn.
 - [ ] Copy over configuration printing from bash scrip
 - [ ] Switch all errors to print to stderr
 - [ ] Collect all FileResult structs into one Vector

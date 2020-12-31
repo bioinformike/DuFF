@@ -11,6 +11,7 @@ use std::env;
 
 
 use ring::digest::{Context, Digest, SHA256};
+use std::fs::File;
 
 // Extract some info from our manifest
 const PROG_NAME: &'static str = env!("CARGO_PKG_NAME");
@@ -31,7 +32,7 @@ pub fn dt()  -> String {
 // 2020_12_31__14_55_06
 pub fn f_dt() -> String {
     let now: DateTime<Utc> = Utc::now();
-    String::from(format!("[{}]", now.format("%Y_%m_%d__%H_%M_%S")))
+    String::from(format!("{}", now.format("%Y_%m_%d__%H_%M_%S")))
 }
 
 
@@ -68,7 +69,7 @@ fn main() {
     // Process user input
     let conf = Config::new(matches);
 
-    println!("{}", conf);
+    conf.print();
 
     let mut file_res: Vec<FileResult> = vec![];
 
@@ -176,14 +177,14 @@ struct Config {
     jobs     : u8,
 
     work_dir : String,
-    work_file : String,
+    work_file : File,
 
-    hash_file : String,
+    hash_file : File,
     prev_hash_file : String,
 
-    report_file     : String,
-    log_file : String,
-    temp_file : String,
+    report_file     : File,
+    log_file : File,
+    temp_file : File,
 
     exts      : Vec<String>
 }
@@ -198,6 +199,8 @@ impl Config {
         let mut is_prog = false;
         let mut is_res = false;
         let mut have_precomp_hash = false;
+        let mut user_set_dir = false;
+
         let mut prev_hash = String::from("");
 
         let mut res_file = String::from("");
@@ -239,6 +242,17 @@ impl Config {
             let in_size = in_size.parse::<u64>();
         }
 
+        if let Some(n_jobs) = in_args.value_of("jobs") {
+            match n_jobs.parse::<u8>() {
+                Ok(n) => jobs = n,
+                Err(e) => {
+                    println!("Number of jobs specificed, {}, is not a valid number!", n_jobs);
+                    process::exit(1);
+                },
+            }
+        }
+
+
         // Extensions to search for, comma separated values.
         if let Some(in_exts) = in_args.value_of("exts") {
             let in_exts = in_args.value_of("exts").unwrap();
@@ -263,6 +277,7 @@ impl Config {
         // we quit!
         if let Some(work_d) = in_args.value_of("work_dir") {
             work_dir = work_d.to_string();
+            let user_set_dir = true;
         } else {
             // File paths
             let cwd = match env::current_dir() {
@@ -277,16 +292,6 @@ impl Config {
             work_dir = String::from(cwd.to_str().unwrap())
         }
 
-        if let Some(n_jobs) = in_args.value_of("jobs") {
-            match n_jobs.parse::<u8>() {
-                Ok(n) => jobs = n,
-                Err(e) => {
-                    println!("Number of jobs specificed, {}, is not a valid number!", n_jobs);
-                    process::exit(1);
-                },
-            }
-        }
-
 
         // Specify the paths for our working files, we'll create them later.
         let mut work_file = format!("{}/wl_dupe_finder_{}.working", work_dir, f_dt());
@@ -296,6 +301,122 @@ impl Config {
 
         let mut report_file = format!("{}/wl_dupe_finder_{}.report", work_dir, f_dt());
 
+        // Try creating our files and if we can't tell the user that we don't have the write
+        // permissions we need for either the directory they specified or cwd
+        let mut work_file = match File::open(Path::new(&work_file)) {
+            Ok(f) => f,
+            Err(e) => {
+                // If the user specified the working dir
+                if user_set_dir {
+                    println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", work_dir,
+                              PROG_NAME.to_owned() + PROG_VERS, e);
+
+                  // User didn't give us a directory so we tried cwd.
+                } else {
+                    println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+                }
+                // Kill the program
+                std::process::exit(1);
+            },
+        };
+
+        let mut hash_file = match File::open(Path::new(&hash_file)) {
+            Ok(f) => f,
+            Err(e) => {
+                // If the user specified the working dir
+                if user_set_dir {
+                    println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", work_dir,
+                             PROG_NAME.to_owned() + PROG_VERS, e);
+
+                    // User didn't give us a directory so we tried cwd.
+                } else {
+                    println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+                }
+                // Kill the program
+                std::process::exit(1);
+            },
+        };
+
+        let mut log_file = match File::open(Path::new(&log_file)) {
+            Ok(f) => f,
+            Err(e) => {
+                // If the user specified the working dir
+                if user_set_dir {
+                    println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", work_dir,
+                             PROG_NAME.to_owned() + PROG_VERS, e);
+
+                    // User didn't give us a directory so we tried cwd.
+                } else {
+                    println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+                }
+                // Kill the program
+                std::process::exit(1);
+            },
+        };
+
+        let mut temp_file = match File::open(Path::new(&temp_file)) {
+            Ok(f) => f,
+            Err(e) => {
+                // If the user specified the working dir
+                if user_set_dir {
+                    println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", work_dir,
+                             PROG_NAME.to_owned() + PROG_VERS, e);
+
+                    // User didn't give us a directory so we tried cwd.
+                } else {
+                    println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+                }
+                // Kill the program
+                std::process::exit(1);
+            },
+        };
+
+        let mut report_file = match File::open(Path::new(&report_file)) {
+            Ok(f) => f,
+            Err(e) => {
+                // If the user specified the working dir
+                if user_set_dir {
+                    println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", work_dir,
+                             PROG_NAME.to_owned() + PROG_VERS, e);
+
+                    // User didn't give us a directory so we tried cwd.
+                } else {
+                    println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+                }
+                // Kill the program
+                std::process::exit(1);
+            },
+        };
         Config {
             search_path: path_vec,
             exts: exts,
@@ -310,31 +431,47 @@ impl Config {
             resume: is_res,
             res_file: res_file,
 
-            work_dir : work_dir,
+            work_dir: work_dir,
             work_file: work_file,
 
             hash_file: hash_file,
-            have_hash : have_precomp_hash,
-            prev_hash_file : prev_hash,
+            have_hash: have_precomp_hash,
+            prev_hash_file: prev_hash,
 
-            report_file : report_file,
-            log_file    : log_file,
-            temp_file   : temp_file
+            report_file: report_file,
+            log_file: log_file,
+            temp_file: temp_file
         }
+    }
+
+    pub fn print(&self) {
+        let size_str = ">".to_owned() + &self.size.to_string() + " Bytes";
+
+        let border_str = "=".repeat(80);
+        println!("{}", border_str);
+        println!("{:<21} {:^39} {:>0}", dt(), "Overview", PROG_NAME.to_owned() + " v" + PROG_VERS);
+        println!("{}", border_str);
+        println!("{:<40} {:>1}", "Status:", "New Run" );
+        println!("{:<40} {:>1}", "Search Directories:", self.search_path.join(","));
+        println!("{:<40} {:>1}", "Extensions:", self.exts.join(", "));
+        println!("{:<40} {:>1}", "Size Threshold:", size_str );
+        println!("{:<40} {:>1}", "Number of Threads:", self.jobs);
+        println!("{:<40} {:>1}", "Working Directory:", self.work_dir);
+        println!("{:<40} {:>1}", "Final Report:", self.report_file);
+        println!("{:<40} {:>1}", "Save Hashes:", self.archive);
+        println!("{:<40} {:>1}", "Debug Mode:", self.debug);
+        println!("{:<40} {:>1}", "Show Progress:", self.prog);
+        println!("{:<40} {:>1}", "Report any issues at", PROG_ISSUES);
+
+
+
     }
 }
 
-impl fmt::Display for Config {
-    // Prints out summary of what the user requested
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-
-        // This is the most horrendous thing I've ever written, but this seemed like the most
+      /*  // This is the most horrendous thing I've ever written, but this seemed like the most
         // straightforward way, somehow, please forgive me!
 
-        let border_str = format!("=========================================================\
-                                          =======", width = 80);
-        let over_str = format!("{}                       Overview                      {}{}",
-                           dt(),   PROG_NAME, PROG_VERS);
+
         let stat_str = "Status:             New Run";
         let search_str  = format!("Search Directories: {}",
                                   self.search_path.join(", "));
@@ -358,5 +495,4 @@ impl fmt::Display for Config {
 
 
 
-    }
-}
+    }*/

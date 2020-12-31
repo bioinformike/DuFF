@@ -17,6 +17,7 @@ Left to implement:
   #    (permission denied) but also won't just quit like Walkstate::Quit does.
   # More docs here: https://docs.rs/ignore/0.4.17/ignore/enum.WalkState.html
    ```
+- [ ] Get File structs inside Config struct
 - [ ] Weed out directories (don't need these to be reported from ignore)
 - [ ] Copy over configuration printing from bash script
 - [ ] Switch all errors to print to stderr

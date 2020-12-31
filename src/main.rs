@@ -70,10 +70,33 @@ fn main() {
         let tx = tx.clone();
         Box::new(move |result| {
             use ignore::WalkState::*;
-            let curr_dir = result.unwrap();
+            let curr_dir = match result {
+                Ok(t) => t,
+                Err(e) => {
+                    println!("[Extract curr_dir error] {}", e);
+                    return ignore::WalkState::Quit;
+                }
+            };
+
             let curr_path = curr_dir.path();
-            let path_str = String::from(curr_path.to_str().unwrap());
-            let curr_meta = curr_dir.metadata().unwrap();
+            let path_str = match curr_path.to_str() {
+                Some(t) => t,
+                None => {
+                    println!("Error path-> path_str");
+                    return ignore::WalkState::Quit;
+                }
+            };
+
+            let path_str = String::from(path_str);
+
+            let curr_meta = match curr_dir.metadata() {
+                Ok(t) => t,
+                Err(e) => {
+                    println!("[Meta error] {}", e);
+                    return ignore::WalkState::Quit;
+                }
+            };
+
             let fs = curr_meta.len();
 
             tx.send(FileResult::new(path_str, fs)).unwrap();

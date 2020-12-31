@@ -1,22 +1,13 @@
 use std::process;
 use clap::{load_yaml, App, ArgMatches};
-//use walkdir::WalkDir;
-//use globwalk::GlobWalkerBuilder;
-use std::fs::FileType;
-//use std::fs;
-//use jwalk::WalkDirGeneric;
-use rayon::ThreadPoolBuilder;
 
 use crossbeam::crossbeam_channel;
 use std::path::Path;
-use crossbeam::queue;
-use crossbeam::thread;
-use std::fs::File;
-use std::io::{BufReader, Read, Error};
-use threadpool::ThreadPool;
-use std::sync::mpsc::channel;
-use ring::digest::{Context, Digest, SHA256};
 use walkdir::WalkDir;
+use ignore::WalkBuilder;
+
+
+use ring::digest::{Context, Digest, SHA256};
 
 fn is_good_ext(curr_dir: &Path, curr_exts: &Vec<String>) -> bool {
 
@@ -51,8 +42,6 @@ fn main() {
 
     let mut file_res: Vec<FileResult> = vec![];
 
-    use ignore::WalkBuilder;
-
     let (tx, rx) = crossbeam_channel::unbounded::<FileResult>();
 
     let mut dirs = conf.search_path.clone();
@@ -74,7 +63,7 @@ fn main() {
                 Ok(t) => t,
                 Err(e) => {
                     println!("[Extract curr_dir error] {}", e);
-                    return ignore::WalkState::Quit;
+                    return ignore::WalkState::Continue;
                 }
             };
 
@@ -83,7 +72,7 @@ fn main() {
                 Some(t) => t,
                 None => {
                     println!("Error path-> path_str");
-                    return ignore::WalkState::Quit;
+                    return ignore::WalkState::Continue;
                 }
             };
 
@@ -93,7 +82,7 @@ fn main() {
                 Ok(t) => t,
                 Err(e) => {
                     println!("[Meta error] {}", e);
-                    return ignore::WalkState::Quit;
+                    return ignore::WalkState::Continue;
                 }
             };
 
@@ -105,6 +94,8 @@ fn main() {
     });
 
     drop(tx);
+    let rx_iter = rx.iter();
+    println!("Rxiter {}", rx_iter.count());
     for t in rx.iter() {
         //let (sha, path) = t.unwrap();
         println!("{:?}", t);

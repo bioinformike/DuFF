@@ -10,11 +10,8 @@ edition = "2018"
 
 [dependencies]
 clap = { version = "2", features = ["yaml", "wrap_help"] }
-globwalk = "*"
+
 walkdir = "2"
-jwalk = "*"
-rayon = "*"
 crossbeam  = "*"
-threadpool = "*"
-ring = "*"
 ignore = "*"
+ring = "*"

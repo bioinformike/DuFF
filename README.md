@@ -9,7 +9,14 @@ to use to learn it!
 Left to implement:
 - [x] Include GH issues in program help.
 - [x] Program is not ending after walking dir structure - likely has to do with error matching logic in run fn.
-- [ ] Running program on / where we will get permission denied (good) we are not getting all directories we should.
+- [x] Running program on / where we will get permission denied (good) we are not getting all directories we should.
+  <br />
+  ```
+  # Switching from Walkstate::Quit to Walkstate::Continue fixed this.
+  # Another possibility is to use Walkstate::Skip which will not descend into a directory for which it gets an error
+  #    (permission denied) but also won't just quit like Walkstate::Quit does.
+  # More docs here: https://docs.rs/ignore/0.4.17/ignore/enum.WalkState.html
+   ```
 - [ ] Weed out directories (don't need these to be reported from ignore)
 - [ ] Copy over configuration printing from bash script
 - [ ] Switch all errors to print to stderr

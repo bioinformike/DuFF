@@ -21,9 +21,13 @@ Left to implement:
 - [ ] Copy over configuration printing from bash script
 - [ ] Switch all errors to print to stderr
 - [ ] Add extension limiting functionality --ext
+- [ ] Add size limiting functionality --size
+- [ ] It would be nice if printing --size out was pretty (converted into best size for printing)
 - [ ] Collect all FileResult structs into one Vector
 - [ ] Fn: Finding dupes in Vector<FileResult> to send to hashing fn
 - [ ] Fn: Hashing
+- [ ] Add mtime, ctime, and atime to FileResult so we can check to see if file changed and whether we have to hash it
+     again.
   
 Testing to do:
 - [ ] Verify extension filtering is working

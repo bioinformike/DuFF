@@ -1,13 +1,40 @@
-use std::process;
+use std::{process, fmt};
 use clap::{load_yaml, App, ArgMatches};
+use chrono::{DateTime, Utc};
+
 
 use crossbeam::crossbeam_channel;
 use std::path::Path;
 use walkdir::WalkDir;
 use ignore::WalkBuilder;
+use std::env;
 
 
 use ring::digest::{Context, Digest, SHA256};
+
+// Extract some info from our manifest
+const PROG_NAME: &'static str = env!("CARGO_PKG_NAME");
+const PROG_VERS: &'static str = env!("CARGO_PKG_VERSION");
+const AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
+const PROG_HOME: &'static str = env!("CARGO_PKG_HOMEPAGE");
+const PROG_ISSUES: &'static str = "https://github.com/bioinformike/dupe_finder/issues";
+
+// Simple date-timestamp function, just returns date and time in following format:
+// [2020-12-31 14:55:06]
+// Includes the square brackets
+pub fn dt()  -> String {
+    let now: DateTime<Utc> = Utc::now();
+    String::from(format!("[{}]", now.format("%Y-%m-%d %H:%M:%S")))
+}
+
+// Date-timestamp with hyphens replaced with underscores for easier reading in filenames
+// 2020_12_31__14_55_06
+pub fn f_dt() -> String {
+    let now: DateTime<Utc> = Utc::now();
+    String::from(format!("[{}]", now.format("%Y_%m_%d__%H_%M_%S")))
+}
+
+
 
 fn is_good_ext(curr_dir: &Path, curr_exts: &Vec<String>) -> bool {
 
@@ -29,6 +56,9 @@ fn is_good_size(curr_fs: u64, min_size: u64) -> bool {
     curr_fs > min_size
 }
 
+
+
+
 fn main() {
 
     // Get user input
@@ -38,7 +68,7 @@ fn main() {
     // Process user input
     let conf = Config::new(matches);
 
-    println!("conf: {:?}", conf);
+    println!("{}", conf);
 
     let mut file_res: Vec<FileResult> = vec![];
 
@@ -57,6 +87,7 @@ fn main() {
 
     walker.run(|| {
         let tx = tx.clone();
+        let conf = conf.clone();
         Box::new(move |result| {
             use ignore::WalkState::*;
             let curr_dir = match result {
@@ -88,7 +119,13 @@ fn main() {
 
             let fs = curr_meta.len();
 
-            tx.send(FileResult::new(path_str, fs)).unwrap();
+            // only want to send something down the channel if its a file and meets our extension
+            // and size requirements.
+            if ((is_good_ext(curr_path, &conf.exts)) &&
+                (is_good_size(fs, conf.size))) {
+                tx.send(FileResult::new(path_str, fs)).unwrap();
+            }
+
             Continue
         })
     });
@@ -105,27 +142,8 @@ fn main() {
 
 
 
-
-
-
-#[derive(Debug)]
-struct Config {
-    search_path: Vec<String>,
-    archive : bool,
-    debug   : bool,
-    prog    : bool,
-    resume  : bool,
-    res_file : String,
-    size     : u64,
-    jobs     : u8,
-
-    work_file : String,
-    hash_file : String,
-    exts      : Vec<String>
-}
-
 // struct to hold file information
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct FileResult {
     file_path : String,
     size : u64,
@@ -142,20 +160,54 @@ impl FileResult {
     }
 }
 
+
+
+
+#[derive(Debug, Clone)]
+struct Config {
+    search_path: Vec<String>,
+    archive : bool,
+    debug   : bool,
+    prog    : bool,
+    resume  : bool,
+    have_hash : bool,
+    res_file : String,
+    size     : u64,
+    jobs     : u8,
+
+    work_dir : String,
+    work_file : String,
+
+    hash_file : String,
+    prev_hash_file : String,
+
+    report_file     : String,
+    log_file : String,
+    temp_file : String,
+
+    exts      : Vec<String>
+}
+
+
 impl Config {
-    pub fn new(in_args: ArgMatches)  -> Config {
+    pub fn new(in_args: ArgMatches) -> Config {
 
         // Flags
         let mut is_arch = false;
         let mut is_debug = false;
-        let mut is_prog  = false;
+        let mut is_prog = false;
         let mut is_res = false;
+        let mut have_precomp_hash = false;
+        let mut prev_hash = String::from("");
 
-        // File paths
         let mut res_file = String::from("");
         let mut hash_file = String::from("");
+        let mut report_file = String::from("");
+
         let mut work_dir = String::from("");
-        let mut in_size = 250_000;
+
+        // min size requirement, default 250MB = 250,000,000 Bytes
+        let mut in_size = 250_000_000;
 
         // Number of jobs to use
         let mut jobs = 1;
@@ -180,28 +232,49 @@ impl Config {
         }
 
         // Deal with arguments
+
+        // Minimum size specification in bytes!
         if let Some(in_size) = in_args.value_of("size") {
             let in_size = in_args.value_of("size").unwrap();
             let in_size = in_size.parse::<u64>();
-
         }
 
+        // Extensions to search for, comma separated values.
         if let Some(in_exts) = in_args.value_of("exts") {
             let in_exts = in_args.value_of("exts").unwrap();
             exts = in_exts.split(',').map(|s| s.to_string()).collect();
         }
 
+        // If they want us to resume then they need to give us a resume file that contains
+        // all search results and we will skip directly to sorting, finding size dupes, then hashing
         if let Some(res_f) = in_args.value_of("resume") {
             res_file = res_f.to_string();
             is_res = true;
         }
 
+        // If they have precomputed hash file we will load this in and skip any files in the hash
+        // file.
         if let Some(hash_f) = in_args.value_of("hash") {
-            hash_file = hash_f.to_string();
+            prev_hash = hash_f.to_string();
+            have_precomp_hash = true;
         }
 
+        // Get work directory, if the user doesn't give us one we try to use cwd and if that fails
+        // we quit!
         if let Some(work_d) = in_args.value_of("work_dir") {
             work_dir = work_d.to_string();
+        } else {
+            // File paths
+            let cwd = match env::current_dir() {
+                Ok(t) => t,
+                Err(e) => {
+                    println!("Could not use current working directory, please specify where {} can \
+                              store temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", PROG_NAME.to_owned() + PROG_VERS, e);
+                    std::process::exit(1);
+                }
+            };
+            work_dir = String::from(cwd.to_str().unwrap())
         }
 
         if let Some(n_jobs) = in_args.value_of("jobs") {
@@ -210,15 +283,80 @@ impl Config {
                 Err(e) => {
                     println!("Number of jobs specificed, {}, is not a valid number!", n_jobs);
                     process::exit(1);
-
                 },
             }
         }
 
 
-        Config { search_path: path_vec, archive : is_arch, debug : is_debug, prog: is_prog,
-            resume : is_res, res_file : res_file, size : in_size, jobs: jobs,
-            work_file : work_dir, hash_file : hash_file, exts : exts }
+        // Specify the paths for our working files, we'll create them later.
+        let mut work_file = format!("{}/wl_dupe_finder_{}.working", work_dir, f_dt());
+        let mut hash_file = format!("{}/wl_dupe_finder_{}.hash", work_dir, f_dt());
+        let mut log_file = format!("{}/wl_dupe_finder_{}.log", work_dir, f_dt());
+        let mut temp_file = format!("{}/wl_dupe_finder_{}.temp", work_dir, f_dt());
+
+        let mut report_file = format!("{}/wl_dupe_finder_{}.report", work_dir, f_dt());
+
+        Config {
+            search_path: path_vec,
+            exts: exts,
+
+            size: in_size,
+            jobs: jobs,
+
+            archive: is_arch,
+            debug: is_debug,
+            prog: is_prog,
+
+            resume: is_res,
+            res_file: res_file,
+
+            work_dir : work_dir,
+            work_file: work_file,
+
+            hash_file: hash_file,
+            have_hash : have_precomp_hash,
+            prev_hash_file : prev_hash,
+
+            report_file : report_file,
+            log_file    : log_file,
+            temp_file   : temp_file
+        }
+    }
+}
+
+impl fmt::Display for Config {
+    // Prints out summary of what the user requested
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+        // This is the most horrendous thing I've ever written, but this seemed like the most
+        // straightforward way, somehow, please forgive me!
+
+        let border_str = format!("=========================================================\
+                                          =======", width = 80);
+        let over_str = format!("{}                       Overview                      {}{}",
+                           dt(),   PROG_NAME, PROG_VERS);
+        let stat_str = "Status:             New Run";
+        let search_str  = format!("Search Directories: {}",
+                                  self.search_path.join(", "));
+        let ext_str = format!("Extensions:            {}",self.exts.join(", "));
+        let size_str = format!("Size Threshold:    >{} Bytes", self.size);
+        let thread_str = format!("Number of Threads:         {}", self.jobs);
+        let work_str = format!("Working Directory:            {}", self.work_dir);
+        let report_str = format!("Final Report:             {}", self.res_file);
+        let hash_str = format!("Save Hashes:             {}", self.archive);
+        let debug_str = format!("Debug Mode:              {}", self.debug);
+        let prog_str = format!("Show Progress:             {}", self.prog);
+        let issue_str = format!("Report any issues at {}", PROG_ISSUES);
+
+
+        write!(f, "{border}\n{over}\n{border}\n{search}\n{ext}\n{size}\n{thread}\n{work}\n\
+                     {report}\n{hash}\n{debug}\n{prog}\n{issue}",
+
+                     border = border_str, over = over_str, search = search_str, ext = ext_str,
+                     size = size_str, thread = thread_str, work = work_str, report = report_str,
+                     hash = hash_str, debug = debug_str, prog = prog_str, issue = issue_str)
+
+
 
     }
 }

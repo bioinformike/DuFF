@@ -16,21 +16,21 @@ args:
       required: true
 
   - size:
-      help: How large do files have to be to check in bytes? (default > 250000 [250MB])
+      help: How large do files have to be to check in bytes? (default > 250,000,000 [250MB])
       short: s
       long: size
       multiple: false
       takes_value: true
 
   - work_dir:
-      help: Where script should store intermediate data
+      help: Where script should store intermediate data (default is cwd)
       short: f
       long: file
       multiple: false
       takes_value: true
 
   - jobs:
-      help: Number of cores you'd like to use
+      help: Number of threads you'd like to use
       short: j
       long: jobs
       multiple: false

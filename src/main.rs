@@ -1,13 +1,13 @@
 use std::process;
 use clap::{load_yaml, App, ArgMatches};
-use walkdir::WalkDir;
-use globwalk::GlobWalkerBuilder;
+//use walkdir::WalkDir;
+//use globwalk::GlobWalkerBuilder;
 use std::fs::FileType;
-use std::fs;
-use jwalk::WalkDirGeneric;
+//use std::fs;
+//use jwalk::WalkDirGeneric;
 use rayon::ThreadPoolBuilder;
 
-use crossbeam::crossbeam_channel::unbounded;
+use crossbeam::crossbeam_channel;
 use std::path::Path;
 use crossbeam::queue;
 use crossbeam::thread;
@@ -16,10 +16,7 @@ use std::io::{BufReader, Read, Error};
 use threadpool::ThreadPool;
 use std::sync::mpsc::channel;
 use ring::digest::{Context, Digest, SHA256};
-
-/*fn is_good_ext(curr_path: Path) -> bool {
-    if path.
-}*/
+use walkdir::WalkDir;
 
 fn is_good_ext(curr_dir: &Path, curr_exts: &Vec<String>) -> bool {
 
@@ -37,11 +34,13 @@ fn is_good_ext(curr_dir: &Path, curr_exts: &Vec<String>) -> bool {
         return false;
     }
 }
+fn is_good_size(curr_fs: u64, min_size: u64) -> bool {
+    curr_fs > min_size
+}
 
-fn main()   {
+fn main() {
 
-//    let pool = ThreadPool::new(5);
-
+    // Get user input
     let yams = load_yaml!("../dupe_args.yml");
     let matches = App::from(yams).get_matches();
 
@@ -50,65 +49,156 @@ fn main()   {
 
     println!("conf: {:?}", conf);
 
-    let mut q = queue::SegQueue::new();
+    let mut file_res: Vec<FileResult> = vec![];
 
-    // Load up our initial dirs onto the queue
-    for x in conf.search_path {
+    use ignore::WalkBuilder;
+
+    let (tx, rx) = crossbeam_channel::unbounded::<FileResult>();
+
+    let mut dirs = conf.search_path.clone();
+    let curr_dir = dirs.pop().unwrap();
+
+    let mut walker = ignore::WalkBuilder::new(Path::new(curr_dir.as_str()));
+
+    for x in dirs.iter() {
+        walker.add(Path::new(x.as_str()));
+    }
+    walker.threads(conf.jobs as usize);
+    let walker = walker.build_parallel();
+
+    walker.run(|| {
+        let tx = tx.clone();
+        Box::new(move |result| {
+            use ignore::WalkState::*;
+            let curr_dir = result.unwrap();
+            let curr_path = curr_dir.path();
+            let path_str = String::from(curr_path.to_str().unwrap());
+            let curr_meta = curr_dir.metadata().unwrap();
+            let fs = curr_meta.len();
+
+            tx.send(FileResult::new(path_str, fs)).unwrap();
+            Continue
+        })
+    });
+
+    for t in rx.iter() {
+        //let (sha, path) = t.unwrap();
+        println!("{:?}", t);
+    }
+}
 
 
-        q.push((Box::new(x)));
-        //let curr_x = x.clone();
-        //let curr_dir = Path::new(&curr_x);
-        //q.push(curr_dir);
+/*    if ((conf.exts.len() > 1) || (curr_exts[0] == "*")) {
+        for x in conf.exts.iter() {
+            walker.
+        }
+    }*/
+
+ /*   let par = jwalk::Parallelism::Serial;
+    if conf.jobs > 1 {
+        let par = jwalk::Parallelism::RayonNewPool(conf.jobs.into());
     }
 
-    for x in 0..conf.jobs {
-        crossbeam::scope(|s| {
-            s.spawn(move |_| {
-                let local_dir = String::from(q.pop().unwrap().as_str());
-                //let local_dir = q.pop().unwrap().as_str();
-                println!("Hello, {}!", local_dir);
+    let curr_dir = &conf.search_path[0];
+    let walker = jwalk::WalkDirGeneric::<((usize),(bool))>::new(curr_dir)
+        .min_depth(1)
+        .parallelism(par);
+
+    walker.process_read_dir(|depth, path, read_dir_state, children| {
+                children.retain(|dir_entry_result| {
+                    let curr_path = dir_entry_result.path().as_path();
+                    let curr_meta = dir_entry_result.metadata().unwrap();
+                    let fs = curr_meta.len();
+                    (is_good_ext(curr_path, &conf.exts)) &&
+                        (is_good_size(fs, conf.size))
+                });
             });
-        }).unwrap();
+
+
+    for entry in walker {
+        println!("{}", entry?.path().display());
     }
-     /*   let curr_dir = x;
-
-        println!("Searching {}", curr_dir);
-
-        let curr_dir = Path::new(&curr_dir);
-
-        // It's a directory!
-        if curr_dir.is_dir() {
-            let contents = match curr_dir.read_dir() {
-                Ok(f) => f,
-                Err(e) => {
-                    println!("Error reading dir contents! [{}] {}", e, curr_dir.to_str().unwrap());
-                    continue
-                }
-            };
 
 
-            // Otherwise it's a file!
-        } else {
+*/
+    // Borrowing a lot from:
+    //     https://rust-lang-nursery.github.io/rust-cookbook/concurrency/threads.html#calculate-sha256-sum-of-iso-files-concurrently
+    //let pool = ThreadPool::new(conf.jobs.into());
 
-            // Before pulling any info, let's make sure this file has extension we want
-            if !is_good_ext(curr_dir, &conf.exts) {
+    //let (tx, rx) = channel();
 
-                let meta = match curr_dir.metadata() {
-                    Ok(f) => f,
-                    Err(e) => {
-                        println!("Error getting meta! [{}] {}", e, curr_dir.to_str().unwrap());
-                        continue
+// Create a channel of unbounded capacity.
+/*    let (s, r) = crossbeam_channel::unbounded();
+
+    for x in conf.search_path.iter() {
+        s.send(Path::new(x));
+    }
+
+    while pool.active_count() > 0 {
+        pool.execute(move || {
+            let curr_dir = r.recv().unwrap();
+
+            // Read the contents of this directory and take appropriate action
+            let contents = curr_dir.read_dir().unwrap();
+
+            for x in contents.into_iter() {
+                let curr_dir_entry = x.unwrap().clone();
+                let curr_path = curr_dir_entry.path().to_owned().as_path();
+                let curr_meta = curr_dir_entry.metadata().unwrap();
+
+                if curr_meta.is_dir() {
+                    s.send(curr_path);
+
+                // Otherwise it's a file!
+                } else {
+                    // Before pulling any info, let's make sure this file has extension we want
+                    if is_good_ext(curr_path, &conf.exts) {
+
+                        let path_str = String::from(curr_path.to_str().unwrap());
+                        let fs = curr_meta.len();
+
+                        if fs >= conf.size {
+                            file_res.push(FileResult::new(path_str, fs));
+                        }
                     }
-                };
-
-                let fs = meta.len();
-
-                println!("[{}] {}", fs, curr_dir.to_str().unwrap());
+                }
             }
+            });
+    }*/
+       /* for x in conf.search_path.iter() {
+            for entry in WalkDir::new(x)
+            .follow_links(true)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| ((!e.path().is_dir()) &&
+                                     (is_good_ext(e.path(),&conf.exts)))) {
+            let path = entry.path().to_owned();
+            //let tx = tx.clone();
+            pool.execute(move || {
+                let fs = path.metadata().unwrap().len();
+
+                let path_str = String::from(path.to_str().unwrap());
+
+                // Only keep track if its within our size requirement.
+                if fs >= conf.size {
+                    file_res.push(FileResult::new(path_str, fs));
+                }
+
+                //tx.send((path_str, fs)).expect("Could not send data!");
+            });
         }
     }
 */
+
+
+    //drop(tx);
+/*    for t in file_res.iter() {
+        println!("{:?} ", t);
+    }*/
+
+
+
+
 
 
  /*   let walker = WalkDir::new(curr_dir);
@@ -162,50 +252,9 @@ fn main()   {
 
     }*/
 
-    /*for entry in WalkDir::new(curr_dir)
-            .follow_links(true)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| !e.path().is_dir() && is_good_ext(e.path())) {
-                println!("{:?}", entry);
-        }
-        //let (tx, rx) = channel();
 
 
-*/
 
-
-/*
-    let path = entry.path().to_owned();
-    let tx = tx.clone();
-    pool.execute(move || {
-        let digest = compute_digest(path);
-        tx.send(digest).expect("Could not send data!");
-    });*/
-/*    drop(tx);
-    for t in rx.iter() {
-        let (sha, path) = t?;
-        println!("{:?} {:?}", sha, path);
-    }
-    Ok(())*/
-}
-
-
-fn compute_digest<P: AsRef<Path>>(filepath: P) -> Result<(Digest, P), Error> {
-    let mut buf_reader = BufReader::new(File::open(&filepath)?);
-    let mut context = Context::new(&SHA256);
-    let mut buffer = [0; 1024];
-
-    loop {
-        let count = buf_reader.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        context.update(&buffer[..count]);
-    }
-
-    Ok((context.finish(), filepath))
-}
 
   /*  // Load in our YAML file describing program options and extract user input
 
@@ -285,12 +334,30 @@ struct Config {
     prog    : bool,
     resume  : bool,
     res_file : String,
-    size     : String,
+    size     : u64,
     jobs     : u8,
 
     work_file : String,
     hash_file : String,
     exts      : Vec<String>
+}
+
+// struct to hold file information
+#[derive(Debug)]
+struct FileResult {
+    file_path : String,
+    size : u64,
+    hash : String
+}
+
+impl FileResult {
+    pub fn new(file_path: String, size: u64) -> FileResult {
+        FileResult {file_path, size, hash : String::new()}
+    }
+
+    pub fn update_hash(&mut self, hash: String)  {
+        self.hash = hash;
+    }
 }
 
 impl Config {
@@ -306,7 +373,7 @@ impl Config {
         let mut res_file = String::from("");
         let mut hash_file = String::from("");
         let mut work_dir = String::from("");
-        let mut in_size = String::from("0 b");
+        let mut in_size = 250_000;
 
         // Number of jobs to use
         let mut jobs = 1;
@@ -332,7 +399,9 @@ impl Config {
 
         // Deal with arguments
         if let Some(in_size) = in_args.value_of("size") {
-            println!("Value for input_size: {}", in_size);
+            let in_size = in_args.value_of("size").unwrap();
+            let in_size = in_size.parse::<u64>();
+
         }
 
         if let Some(in_exts) = in_args.value_of("exts") {

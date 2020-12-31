@@ -10,8 +10,10 @@ Left to implement:
 - [x] Include GH issues in program help.
 - [x] Program is not ending after walking dir structure - likely has to do with error matching logic in run fn.
 - [ ] Running program on / where we will get permission denied (good) we are not getting all directories we should.
-- [ ] Copy over configuration printing from bash scrip
+- [ ] Weed out directories (don't need these to be reported from ignore)
+- [ ] Copy over configuration printing from bash script
 - [ ] Switch all errors to print to stderr
+- [ ] Add extension limiting functionality --ext
 - [ ] Collect all FileResult structs into one Vector
 - [ ] Fn: Finding dupes in Vector<FileResult> to send to hashing fn
 - [ ] Fn: Hashing

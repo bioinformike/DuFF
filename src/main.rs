@@ -69,6 +69,123 @@ fn main() {
     // Process user input
     let conf = Config::new(matches);
 
+    // Try creating our files and if we can't tell the user that we don't have the write
+    // permissions we need for either the directory they specified or cwd
+    let mut work_file = match File::create(Path::new(&conf.work_file)) {
+        Ok(f) => f,
+        Err(e) => {
+            // If the user specified the working dir
+            if conf.user_set_dir {
+                println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", conf.work_dir,
+                              PROG_NAME.to_owned() + PROG_VERS, e);
+
+                // User didn't give us a directory so we tried cwd.
+            } else {
+                println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", conf.work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+            }
+            // Kill the program
+            std::process::exit(1);
+        },
+    };
+
+    let mut hash_file = match File::create(Path::new(&conf.hash_file)) {
+        Ok(f) => f,
+        Err(e) => {
+            // If the user specified the working dir
+            if conf.user_set_dir {
+                println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", conf.work_dir,
+                         PROG_NAME.to_owned() + PROG_VERS, e);
+
+                // User didn't give us a directory so we tried cwd.
+            } else {
+                println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", conf.work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+            }
+            // Kill the program
+            std::process::exit(1);
+        },
+    };
+
+    let mut log_file = match File::create(Path::new(&conf.log_file)) {
+        Ok(f) => f,
+        Err(e) => {
+            // If the user specified the working dir
+            if conf.user_set_dir {
+                println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", conf.work_dir,
+                         PROG_NAME.to_owned() + PROG_VERS, e);
+
+                // User didn't give us a directory so we tried cwd.
+            } else {
+                println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", conf.work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+            }
+            // Kill the program
+            std::process::exit(1);
+        },
+    };
+
+    let mut temp_file = match File::create(Path::new(&conf.temp_file)) {
+        Ok(f) => f,
+        Err(e) => {
+            // If the user specified the working dir
+            if conf.user_set_dir {
+                println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", conf.work_dir,
+                         PROG_NAME.to_owned() + PROG_VERS, e);
+
+                // User didn't give us a directory so we tried cwd.
+            } else {
+                println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", conf.work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+            }
+            // Kill the program
+            std::process::exit(1);
+        },
+    };
+
+    let mut report_file = match File::create(Path::new(&conf.report_file)) {
+        Ok(f) => f,
+        Err(e) => {
+            // If the user specified the working dir
+            if conf.user_set_dir {
+                println!("Could not write to specified working directory {}.  Please specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument.\nError text: {}", conf.work_dir,
+                         PROG_NAME.to_owned() + PROG_VERS, e);
+
+                // User didn't give us a directory so we tried cwd.
+            } else {
+                println!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.\nError \
+                               text: {}", conf.work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
+            }
+            // Kill the program
+            std::process::exit(1);
+        },
+    };
+
     conf.print();
 
     let mut file_res: Vec<FileResult> = vec![];
@@ -172,25 +289,26 @@ struct Config {
     prog    : bool,
     resume  : bool,
     have_hash : bool,
+    user_set_dir : bool,
     res_file : String,
     size     : u64,
     jobs     : u8,
 
     work_dir : String,
-    work_file : File,
+    work_file : String,
 
-    hash_file : File,
+    hash_file : String,
     prev_hash_file : String,
 
-    report_file     : File,
-    log_file : File,
-    temp_file : File,
+    report_file     : String,
+    log_file : String,
+    temp_file : String,
 
     exts      : Vec<String>
 }
 
 
-impl Config {
+impl Config  {
     pub fn new(in_args: ArgMatches) -> Config {
 
         // Flags
@@ -299,124 +417,9 @@ impl Config {
         let mut log_file = format!("{}/wl_dupe_finder_{}.log", work_dir, f_dt());
         let mut temp_file = format!("{}/wl_dupe_finder_{}.temp", work_dir, f_dt());
 
-        let mut report_file = format!("{}/wl_dupe_finder_{}.report", work_dir, f_dt());
+        let mut report_file_str = format!("{}/wl_dupe_finder_{}.report", work_dir, f_dt());
+        let mut report_file = report_file_str.clone();
 
-        // Try creating our files and if we can't tell the user that we don't have the write
-        // permissions we need for either the directory they specified or cwd
-        let mut work_file = match File::open(Path::new(&work_file)) {
-            Ok(f) => f,
-            Err(e) => {
-                // If the user specified the working dir
-                if user_set_dir {
-                    println!("Could not write to specified working directory {}.  Please specify \
-                              a working directory with write permissions where {} can store \
-                              temporary files and the final report using the -f (--file) \
-                              argument.\nError text: {}", work_dir,
-                              PROG_NAME.to_owned() + PROG_VERS, e);
-
-                  // User didn't give us a directory so we tried cwd.
-                } else {
-                    println!("You did not specify a working directory (-f, --file) and the CWD\
-                               [{}] is not writeable. Please specify where {} can store temporary \
-                               files and the final report using the -f (--file) argument.\nError \
-                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
-                }
-                // Kill the program
-                std::process::exit(1);
-            },
-        };
-
-        let mut hash_file = match File::open(Path::new(&hash_file)) {
-            Ok(f) => f,
-            Err(e) => {
-                // If the user specified the working dir
-                if user_set_dir {
-                    println!("Could not write to specified working directory {}.  Please specify \
-                              a working directory with write permissions where {} can store \
-                              temporary files and the final report using the -f (--file) \
-                              argument.\nError text: {}", work_dir,
-                             PROG_NAME.to_owned() + PROG_VERS, e);
-
-                    // User didn't give us a directory so we tried cwd.
-                } else {
-                    println!("You did not specify a working directory (-f, --file) and the CWD\
-                               [{}] is not writeable. Please specify where {} can store temporary \
-                               files and the final report using the -f (--file) argument.\nError \
-                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
-                }
-                // Kill the program
-                std::process::exit(1);
-            },
-        };
-
-        let mut log_file = match File::open(Path::new(&log_file)) {
-            Ok(f) => f,
-            Err(e) => {
-                // If the user specified the working dir
-                if user_set_dir {
-                    println!("Could not write to specified working directory {}.  Please specify \
-                              a working directory with write permissions where {} can store \
-                              temporary files and the final report using the -f (--file) \
-                              argument.\nError text: {}", work_dir,
-                             PROG_NAME.to_owned() + PROG_VERS, e);
-
-                    // User didn't give us a directory so we tried cwd.
-                } else {
-                    println!("You did not specify a working directory (-f, --file) and the CWD\
-                               [{}] is not writeable. Please specify where {} can store temporary \
-                               files and the final report using the -f (--file) argument.\nError \
-                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
-                }
-                // Kill the program
-                std::process::exit(1);
-            },
-        };
-
-        let mut temp_file = match File::open(Path::new(&temp_file)) {
-            Ok(f) => f,
-            Err(e) => {
-                // If the user specified the working dir
-                if user_set_dir {
-                    println!("Could not write to specified working directory {}.  Please specify \
-                              a working directory with write permissions where {} can store \
-                              temporary files and the final report using the -f (--file) \
-                              argument.\nError text: {}", work_dir,
-                             PROG_NAME.to_owned() + PROG_VERS, e);
-
-                    // User didn't give us a directory so we tried cwd.
-                } else {
-                    println!("You did not specify a working directory (-f, --file) and the CWD\
-                               [{}] is not writeable. Please specify where {} can store temporary \
-                               files and the final report using the -f (--file) argument.\nError \
-                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
-                }
-                // Kill the program
-                std::process::exit(1);
-            },
-        };
-
-        let mut report_file = match File::open(Path::new(&report_file)) {
-            Ok(f) => f,
-            Err(e) => {
-                // If the user specified the working dir
-                if user_set_dir {
-                    println!("Could not write to specified working directory {}.  Please specify \
-                              a working directory with write permissions where {} can store \
-                              temporary files and the final report using the -f (--file) \
-                              argument.\nError text: {}", work_dir,
-                             PROG_NAME.to_owned() + PROG_VERS, e);
-
-                    // User didn't give us a directory so we tried cwd.
-                } else {
-                    println!("You did not specify a working directory (-f, --file) and the CWD\
-                               [{}] is not writeable. Please specify where {} can store temporary \
-                               files and the final report using the -f (--file) argument.\nError \
-                               text: {}", work_dir, PROG_NAME.to_owned() + PROG_VERS, e);
-                }
-                // Kill the program
-                std::process::exit(1);
-            },
-        };
         Config {
             search_path: path_vec,
             exts: exts,
@@ -427,6 +430,7 @@ impl Config {
             archive: is_arch,
             debug: is_debug,
             prog: is_prog,
+            user_set_dir : user_set_dir,
 
             resume: is_res,
             res_file: res_file,

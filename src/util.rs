@@ -1,0 +1,89 @@
+/*
+    This file/module contains a bunch of utility functions used by the main logic.
+ */
+
+
+// Load in required crates
+use chrono::{DateTime, Utc};
+use std::fs::File;
+use std::path::Path;
+
+// Extract some info from our manifest
+pub const PROG_NAME: &'static str = env!("CARGO_PKG_NAME");
+pub const PROG_VERS: &'static str = env!("CARGO_PKG_VERSION");
+pub const AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
+pub const PROG_HOME: &'static str = env!("CARGO_PKG_HOMEPAGE");
+pub const PROG_ISSUES: &'static str = "https://github.com/bioinformike/dupe_finder/issues";
+
+
+// Simple date-timestamp function, just returns date and time in following format:
+// [2020-12-31 14:55:06]
+// Includes the square brackets
+pub fn dt() -> String {
+    let now: DateTime<Utc> = Utc::now();
+    String::from(format!("[{}]", now.format("%Y-%m-%d %H:%M:%S")))
+}
+
+// Date-timestamp with hyphens replaced with underscores for easier reading in filenames
+// 2020_12_31__14_55_06
+pub fn f_dt() -> String {
+    let now: DateTime<Utc> = Utc::now();
+    String::from(format!("{}", now.format("%Y_%m_%d__%H_%M_%S")))
+}
+
+// user_dir: User specified the directory to use (changes the error message)
+// file_str: full path to file to be created.
+// work_dir: the path to the directory where the file is being placed (used for error messages)
+pub fn open_file(file_str: &String, work_dir: &String, user_dir: bool) -> File {
+    let mut new_file = match File::create(Path::new(&file_str)) {
+        Ok(f) => f,
+        Err(e) => {
+            // If the user specified the working dir
+            if user_dir {
+                let err_str = format!("Could not write to specified working directory {}.  \nPlease specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument. Error text: {}", work_dir,
+                                      PROG_NAME.to_owned() + " v" + PROG_VERS, e);
+                println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+
+                // User didn't give us a directory so we tried cwd.
+            } else {
+                let err_str = format!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.Error \
+                               text: {}", work_dir, PROG_NAME.to_owned() + " v" + PROG_VERS, e);
+                println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+            }
+            // Kill the program
+            std::process::exit(1);
+        },
+    };
+    new_file
+}
+
+// Checks if the input Path matches one of the extensions in the curr_exts input.
+// If curr_exts only has one element and that is '*', then this function returns true stat.
+pub fn is_good_ext(curr_dir: &Path, curr_exts: &Vec<String>) -> bool {
+    if ((curr_exts.len() == 1) && (curr_exts[0] == "*")) {
+        return true;
+    } else {
+        let clean_fn = curr_dir.file_name().unwrap().to_str().unwrap().to_string();
+
+        for x in curr_exts.iter() {
+            if clean_fn.ends_with(x) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+// Checks if the size of the file input as curr_fs is greater than or equal to the requested
+// minimum file size.  This could have been left in the main code but pulling it out seemed
+// cleaner to me.
+pub fn is_good_size(curr_fs: u64, min_size: u64) -> bool {
+    curr_fs >= min_size
+}
+

@@ -37,8 +37,8 @@ Left to implement:
 - [ ] Fn: Hashing
 - [ ] Add mtime, ctime, and atime to FileResult so we can check to see if file changed and whether we have to hash it
      again.
-- [ ] Refactor code (Move most code out of main.rs)
-  
+- [x] Refactor code (Move most code out of main.rs)
+- [ ] Deal with cargo warnings
 Testing to do:
 - [ ] Add tests for extension filtering ]
 - [ ] Add tests for size filtering

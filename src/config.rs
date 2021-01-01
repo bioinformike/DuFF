@@ -1,0 +1,202 @@
+use crate::util::*;
+
+use std::{process,env};
+use pretty_bytes::converter;
+use clap::ArgMatches;
+
+
+#[derive(Debug, Clone)]
+pub struct Config {
+
+    pub search_path: Vec<String>,
+    pub archive : bool,
+    pub debug   : bool,
+    pub prog    : bool,
+    pub resume  : bool,
+    pub have_hash : bool,
+    pub user_set_dir : bool,
+    pub res_file : String,
+    pub size     : u64,
+    pub jobs     : u64,
+
+    pub work_dir : String,
+    pub work_file : String,
+
+    pub hash_file : String,
+    pub prev_hash_file : String,
+
+    pub report_file     : String,
+    pub log_file : String,
+    pub temp_file : String,
+
+    pub exts      : Vec<String>
+}
+
+
+impl Config  {
+    pub fn new(in_args: ArgMatches) -> Config {
+
+        // Flags
+        let mut is_arch = false;
+        let mut is_debug = false;
+        let mut is_prog = false;
+        let mut is_res = false;
+        let mut have_precomp_hash = false;
+        let mut user_set_dir = false;
+
+        let mut prev_hash = String::from("");
+
+        let mut res_file = String::from("");
+        let mut hash_file = String::from("");
+        let mut report_file = String::from("");
+
+        let mut work_dir = String::from("");
+
+        // min size requirement, default 250MB = 250,000,000 Bytes
+        let mut in_size = 250_000_000;
+
+        // Number of jobs to use
+        let mut jobs = 1;
+
+        // Extension string
+        let mut exts: Vec<String> = vec![String::from("*")];
+
+        let paths = in_args.value_of("dir").unwrap();
+        let path_vec: Vec<String> = paths.split(',').map(|s| s.to_string()).collect();
+
+        // Deal with our flag options
+        if in_args.is_present("archive") {
+            is_arch = true;
+        }
+
+        if in_args.is_present("debug") {
+            is_debug = true;
+        }
+
+        if in_args.is_present("prog") {
+            is_prog = true;
+        }
+
+        // Deal with arguments
+
+        // Minimum size specification in bytes!
+        if let Some(in_size) = in_args.value_of("size") {
+            let in_size = in_args.value_of("size").unwrap();
+            let in_size = in_size.parse::<u64>();
+        }
+
+        if let Some(n_jobs) = in_args.value_of("jobs") {
+            match n_jobs.parse::<u64>() {
+                Ok(n) => jobs = n,
+                Err(e) => {
+                    let err_str = format!("Number of jobs specificed, {}, is not a valid number!",
+                                          n_jobs);
+                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    process::exit(1);
+                },
+            }
+        }
+
+
+        // Extensions to search for, comma separated values.
+        if let Some(in_exts) = in_args.value_of("exts") {
+            let in_exts = in_args.value_of("exts").unwrap();
+            exts = in_exts.split(',').map(|s| s.to_string()).collect();
+        }
+
+        // If they want us to resume then they need to give us a resume file that contains
+        // all search results and we will skip directly to sorting, finding size dupes, then hashing
+        if let Some(res_f) = in_args.value_of("resume") {
+            res_file = res_f.to_string();
+            is_res = true;
+        }
+
+        // If they have precomputed hash file we will load this in and skip any files in the hash
+        // file.
+        if let Some(hash_f) = in_args.value_of("hash") {
+            prev_hash = hash_f.to_string();
+            have_precomp_hash = true;
+        }
+
+        // Get work directory, if the user doesn't give us one we try to use cwd and if that fails
+        // we quit!
+        if let Some(work_d) = in_args.value_of("work_dir") {
+            work_dir = work_d.to_string();
+            user_set_dir = true;
+        } else {
+            // File paths
+            let cwd = match env::current_dir() {
+                Ok(t) => t,
+                Err(e) => {
+                    let err_str = format!("Could not use current working directory, please specify where {} can \
+                              store temporary files and the final report using the -f (--file) \
+                              argument. \nError text: {}", PROG_NAME.to_owned() + PROG_VERS, e);
+                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+
+                    std::process::exit(1);
+                }
+            };
+            work_dir = String::from(cwd.to_str().unwrap())
+        }
+
+
+        // Specify the paths for our working files, we'll create them later.
+        let mut work_file = format!("{}/wl_dupe_finder_{}.working", work_dir, f_dt());
+        let mut hash_file = format!("{}/wl_dupe_finder_{}.hash", work_dir, f_dt());
+        let mut log_file = format!("{}/wl_dupe_finder_{}.log", work_dir, f_dt());
+        let mut temp_file = format!("{}/wl_dupe_finder_{}.temp", work_dir, f_dt());
+
+        let mut report_file_str = format!("{}/wl_dupe_finder_{}.report", work_dir, f_dt());
+        let mut report_file = report_file_str.clone();
+
+        Config {
+            search_path: path_vec,
+            exts: exts,
+
+            size: in_size,
+            jobs: jobs,
+
+            archive: is_arch,
+            debug: is_debug,
+            prog: is_prog,
+            user_set_dir : user_set_dir,
+
+            resume: is_res,
+            res_file: res_file,
+
+            work_dir: work_dir,
+            work_file: work_file,
+
+            hash_file: hash_file,
+            have_hash: have_precomp_hash,
+            prev_hash_file: prev_hash,
+
+            report_file: report_file,
+            log_file: log_file,
+            temp_file: temp_file
+        }
+    }
+
+    pub fn print(&self) {
+        let size_str = converter::convert(self.size as f64);
+
+        let border_str = "=".repeat(textwrap::termwidth());
+        println!("{}", border_str);
+        println!("{:<21} {:^39} {:>0}", dt(), "Overview", PROG_NAME.to_owned() + " v" + PROG_VERS);
+        println!("{}", border_str);
+        println!("{:<40} {:>1}", "Status:", "New Run" );
+        println!("{:<40} {:>1}", "Search Directories:", self.search_path.join(","));
+        println!("{:<40} {:>1}", "Extensions:", self.exts.join(", "));
+        println!("{:<40} {:>1}", "Size Threshold:", size_str );
+        println!("{:<40} {:>1}", "Number of Threads:", self.jobs);
+        println!("{:<40} {:>1}", "Working Directory:", self.work_dir);
+        println!("{:<40} {:>1}", "Final Report:", self.report_file);
+        println!("{:<40} {:>1}", "Save Hashes:", self.archive);
+        println!("{:<40} {:>1}", "Debug Mode:", self.debug);
+        println!("{:<40} {:>1}", "Show Progress:", self.prog);
+        println!("{:<40} {:>1}", "Report any issues at:", PROG_ISSUES);
+
+
+
+    }
+}

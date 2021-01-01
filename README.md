@@ -32,13 +32,21 @@ Left to implement:
 - [x] Add extension limiting functionality --ext
 - [x] Add size limiting functionality --size
 - [x] It would be nice if printing --size out was pretty (converted into best size for printing)
-- [ ] Collect all FileResult structs into one Vector
+- [x] Collect all FileResult structs into one Vector
+  <br />```Being stored in file_res```
 - [ ] Fn: Finding dupes in Vector<FileResult> to send to hashing fn
 - [ ] Fn: Hashing
 - [ ] Add mtime, ctime, and atime to FileResult so we can check to see if file changed and whether we have to hash it
      again.
 - [x] Refactor code (Move most code out of main.rs)
-- [ ] Deal with cargo warnings
+- [x] Deal with cargo warnings
+  <br /> ```Still some warnings left but all for unused variables that I will in future code.```
+- [ ] Need to deal with issues when we traverse into same directory twice.
+  <br /> ```Could definitely filter baged on path in file_res, if a path isn't unique delete all but 1 FileResult 
+         instance for this path.```
+
+
+
 Testing to do:
 - [ ] Add tests for extension filtering ]
 - [ ] Add tests for size filtering

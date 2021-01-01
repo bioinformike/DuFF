@@ -117,13 +117,13 @@ fn main() {
     });
 
     drop(tx);
-    let rx_iter = rx.iter();
-    println!("Rxiter {}", rx_iter.count());
+
     for t in rx.iter() {
-        //let (sha, path) = t.unwrap();
         println!("{:?}", t);
+        file_res.push(t);
     }
     drop(rx);
+    println!("{}", file_res.len());
 }
 
 

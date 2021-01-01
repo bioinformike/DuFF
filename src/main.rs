@@ -6,15 +6,15 @@ use crate::util::*;
 use crate::config::*;
 use crate::file_result::*;
 
-use std::{process, fmt, env, path::Path};
-use clap::{load_yaml, App, ArgMatches};
+use std::{path::Path};
+use clap::{load_yaml, App};
 
 
 
 use crossbeam::crossbeam_channel;
 
-use walkdir::WalkDir;
-use ignore::WalkBuilder;
+use walkdir;
+use ignore;
 
 
 use ring::digest::{Context, Digest, SHA256};
@@ -31,19 +31,19 @@ fn main() {
 
     // Try creating our files and if we can't tell the user that we don't have the write
     // permissions we need for either the directory they specified or cwd
-    let mut work_file = open_file(&conf.work_file, &conf.work_dir,
+    let work_file = open_file(&conf.work_file, &conf.work_dir,
                                         conf.user_set_dir);
 
-    let mut hash_file = open_file(&conf.hash_file, &conf.work_dir,
+    let hash_file = open_file(&conf.hash_file, &conf.work_dir,
                                   conf.user_set_dir);
 
-    let mut log_file = open_file(&conf.log_file, &conf.work_dir,
+    let log_file = open_file(&conf.log_file, &conf.work_dir,
                                   conf.user_set_dir);
 
-    let mut temp_file = open_file(&conf.temp_file, &conf.work_dir,
+    let temp_file = open_file(&conf.temp_file, &conf.work_dir,
                                   conf.user_set_dir);
 
-    let mut report_file = open_file(&conf.report_file, &conf.work_dir,
+    let report_file = open_file(&conf.report_file, &conf.work_dir,
                                   conf.user_set_dir);
 
 

@@ -2,6 +2,8 @@
     This file/module contains a bunch of utility functions used by the main logic.
  */
 
+// I sometimes use extra parens to make thing more readable to me
+#![allow(unused_parens)]
 
 // Load in required crates
 use chrono::{DateTime, Utc};
@@ -11,8 +13,6 @@ use std::path::Path;
 // Extract some info from our manifest
 pub const PROG_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const PROG_VERS: &'static str = env!("CARGO_PKG_VERSION");
-pub const AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
-pub const PROG_HOME: &'static str = env!("CARGO_PKG_HOMEPAGE");
 pub const PROG_ISSUES: &'static str = "https://github.com/bioinformike/dupe_finder/issues";
 
 
@@ -35,7 +35,7 @@ pub fn f_dt() -> String {
 // file_str: full path to file to be created.
 // work_dir: the path to the directory where the file is being placed (used for error messages)
 pub fn open_file(file_str: &String, work_dir: &String, user_dir: bool) -> File {
-    let mut new_file = match File::create(Path::new(&file_str)) {
+    let new_file = match File::create(Path::new(&file_str)) {
         Ok(f) => f,
         Err(e) => {
             // If the user specified the working dir

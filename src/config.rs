@@ -44,16 +44,16 @@ impl Config  {
         let mut have_precomp_hash = false;
         let mut user_set_dir = false;
 
-        let mut prev_hash = String::from("");
 
+        // Files from previous work
+        let mut prev_hash = String::from("");
         let mut res_file = String::from("");
-        let mut hash_file = String::from("");
-        let mut report_file = String::from("");
+
 
         let mut work_dir = String::from("");
 
         // min size requirement, default 250MB = 250,000,000 Bytes
-        let mut in_size = 250_000_000;
+        let in_size = 250_000_000;
 
         // Number of jobs to use
         let mut jobs = 1;
@@ -88,7 +88,7 @@ impl Config  {
         if let Some(n_jobs) = in_args.value_of("jobs") {
             match n_jobs.parse::<u64>() {
                 Ok(n) => jobs = n,
-                Err(e) => {
+                Err(_e) => {
                     let err_str = format!("Number of jobs specificed, {}, is not a valid number!",
                                           n_jobs);
                     println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
@@ -99,7 +99,7 @@ impl Config  {
 
 
         // Extensions to search for, comma separated values.
-        if let Some(in_exts) = in_args.value_of("exts") {
+        if let Some(_in_exts) = in_args.value_of("exts") {
             let in_exts = in_args.value_of("exts").unwrap();
             exts = in_exts.split(',').map(|s| s.to_string()).collect();
         }
@@ -141,13 +141,13 @@ impl Config  {
 
 
         // Specify the paths for our working files, we'll create them later.
-        let mut work_file = format!("{}/wl_dupe_finder_{}.working", work_dir, f_dt());
-        let mut hash_file = format!("{}/wl_dupe_finder_{}.hash", work_dir, f_dt());
-        let mut log_file = format!("{}/wl_dupe_finder_{}.log", work_dir, f_dt());
-        let mut temp_file = format!("{}/wl_dupe_finder_{}.temp", work_dir, f_dt());
+        let work_file = format!("{}/wl_dupe_finder_{}.working", work_dir, f_dt());
+        let hash_file = format!("{}/wl_dupe_finder_{}.hash", work_dir, f_dt());
+        let log_file = format!("{}/wl_dupe_finder_{}.log", work_dir, f_dt());
+        let temp_file = format!("{}/wl_dupe_finder_{}.temp", work_dir, f_dt());
 
-        let mut report_file_str = format!("{}/wl_dupe_finder_{}.report", work_dir, f_dt());
-        let mut report_file = report_file_str.clone();
+        let report_file_str = format!("{}/wl_dupe_finder_{}.report", work_dir, f_dt());
+        let report_file = report_file_str.clone();
 
         Config {
             search_path: path_vec,

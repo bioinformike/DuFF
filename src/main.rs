@@ -8,7 +8,8 @@ use std::path::Path;
 use walkdir::WalkDir;
 use ignore::WalkBuilder;
 use std::env;
-
+use textwrap;
+use pretty_bytes::converter;
 
 use ring::digest::{Context, Digest, SHA256};
 use std::fs::File;
@@ -19,6 +20,7 @@ const PROG_VERS: &'static str = env!("CARGO_PKG_VERSION");
 const AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
 const PROG_HOME: &'static str = env!("CARGO_PKG_HOMEPAGE");
 const PROG_ISSUES: &'static str = "https://github.com/bioinformike/dupe_finder/issues";
+
 
 // Simple date-timestamp function, just returns date and time in following format:
 // [2020-12-31 14:55:06]
@@ -35,7 +37,36 @@ pub fn f_dt() -> String {
     String::from(format!("{}", now.format("%Y_%m_%d__%H_%M_%S")))
 }
 
+// user_dir: User specified the directory to use (changes the error message)
+// file_str: full path to file to be created.
+// work_dir: the path to the directory where the file is being placed (used for error messages)
+fn open_file(file_str: &String, work_dir: &String, user_dir: bool) -> File {
+    let mut new_file = match File::create(Path::new(&file_str)) {
+        Ok(f) => f,
+        Err(e) => {
+            // If the user specified the working dir
+            if user_dir {
+                let err_str = format!("Could not write to specified working directory {}.  \nPlease specify \
+                              a working directory with write permissions where {} can store \
+                              temporary files and the final report using the -f (--file) \
+                              argument. Error text: {}", work_dir,
+                              PROG_NAME.to_owned() + " v" + PROG_VERS, e);
+                println!("{}", textwrap::fill(err_str.as_str(),textwrap::termwidth()));
 
+                // User didn't give us a directory so we tried cwd.
+            } else {
+                let err_str = format!("You did not specify a working directory (-f, --file) and the CWD\
+                               [{}] is not writeable. Please specify where {} can store temporary \
+                               files and the final report using the -f (--file) argument.Error \
+                               text: {}", work_dir, PROG_NAME.to_owned()  + " v" + PROG_VERS, e);
+                println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+            }
+            // Kill the program
+            std::process::exit(1);
+        },
+    };
+    new_file
+}
 
 fn is_good_ext(curr_dir: &Path, curr_exts: &Vec<String>) -> bool {
 
@@ -69,6 +100,8 @@ fn main() {
     // Process user input
     let conf = Config::new(matches);
 
+
+    let mut work_file = open_file(&conf.work_file, &conf.work_dir, conf.user_set_dir);
     // Try creating our files and if we can't tell the user that we don't have the write
     // permissions we need for either the directory they specified or cwd
     let mut work_file = match File::create(Path::new(&conf.work_file)) {
@@ -217,6 +250,12 @@ fn main() {
             };
 
             let curr_path = curr_dir.path();
+
+            // We don't care abou directories!
+            if curr_path.is_dir() {
+                return ignore::WalkState::Continue;
+            }
+
             let path_str = match curr_path.to_str() {
                 Some(t) => t,
                 None => {
@@ -239,8 +278,9 @@ fn main() {
 
             // only want to send something down the channel if its a file and meets our extension
             // and size requirements.
-            if ((is_good_ext(curr_path, &conf.exts)) &&
-                (is_good_size(fs, conf.size))) {
+            let ext_match = is_good_ext(curr_path, &conf.exts);
+            let size_match = is_good_size(fs, conf.size);
+            if ext_match && size_match  {
                 tx.send(FileResult::new(path_str, fs)).unwrap();
             }
 
@@ -292,7 +332,7 @@ struct Config {
     user_set_dir : bool,
     res_file : String,
     size     : u64,
-    jobs     : u8,
+    jobs     : u64,
 
     work_dir : String,
     work_file : String,
@@ -361,10 +401,12 @@ impl Config  {
         }
 
         if let Some(n_jobs) = in_args.value_of("jobs") {
-            match n_jobs.parse::<u8>() {
+            match n_jobs.parse::<u64>() {
                 Ok(n) => jobs = n,
                 Err(e) => {
-                    println!("Number of jobs specificed, {}, is not a valid number!", n_jobs);
+                    let err_str = format!("Number of jobs specificed, {}, is not a valid number!",
+                                      n_jobs);
+                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
                     process::exit(1);
                 },
             }
@@ -395,15 +437,17 @@ impl Config  {
         // we quit!
         if let Some(work_d) = in_args.value_of("work_dir") {
             work_dir = work_d.to_string();
-            let user_set_dir = true;
+            user_set_dir = true;
         } else {
             // File paths
             let cwd = match env::current_dir() {
                 Ok(t) => t,
                 Err(e) => {
-                    println!("Could not use current working directory, please specify where {} can \
+                    let err_str = format!("Could not use current working directory, please specify where {} can \
                               store temporary files and the final report using the -f (--file) \
-                              argument.\nError text: {}", PROG_NAME.to_owned() + PROG_VERS, e);
+                              argument. \nError text: {}", PROG_NAME.to_owned() + PROG_VERS, e);
+                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+
                     std::process::exit(1);
                 }
             };
@@ -449,9 +493,9 @@ impl Config  {
     }
 
     pub fn print(&self) {
-        let size_str = ">".to_owned() + &self.size.to_string() + " Bytes";
+        let size_str = converter::convert(self.size as f64);
 
-        let border_str = "=".repeat(80);
+        let border_str = "=".repeat(textwrap::termwidth());
         println!("{}", border_str);
         println!("{:<21} {:^39} {:>0}", dt(), "Overview", PROG_NAME.to_owned() + " v" + PROG_VERS);
         println!("{}", border_str);
@@ -465,7 +509,7 @@ impl Config  {
         println!("{:<40} {:>1}", "Save Hashes:", self.archive);
         println!("{:<40} {:>1}", "Debug Mode:", self.debug);
         println!("{:<40} {:>1}", "Show Progress:", self.prog);
-        println!("{:<40} {:>1}", "Report any issues at", PROG_ISSUES);
+        println!("{:<40} {:>1}", "Report any issues at:", PROG_ISSUES);
 
 
 

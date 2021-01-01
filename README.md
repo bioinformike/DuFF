@@ -17,20 +17,30 @@ Left to implement:
   #    (permission denied) but also won't just quit like Walkstate::Quit does.
   # More docs here: https://docs.rs/ignore/0.4.17/ignore/enum.WalkState.html
    ```
-- [ ] Get File structs inside Config struct
-- [ ] Weed out directories (don't need these to be reported from ignore)
-- [ ] Copy over configuration printing from bash script
+- [x] Get File structs inside Config struct
+  <br />
+  ```
+  # Gave up as it doesn't seem possible. Stuffing strings in Config struct and just creating files in main :(
+   ```
+- [x] Weed out directories (don't need these to be reported from ignore)
+- [x] Copy over configuration printing from bash script
+  <br />
+  ```
+  # Currently not coded to wrap the output, so not sure how that will act in a real terminal.
+   ```
 - [ ] Switch all errors to print to stderr
-- [ ] Add extension limiting functionality --ext
-- [ ] Add size limiting functionality --size
-- [ ] It would be nice if printing --size out was pretty (converted into best size for printing)
+- [x] Add extension limiting functionality --ext
+- [x] Add size limiting functionality --size
+- [x] It would be nice if printing --size out was pretty (converted into best size for printing)
 - [ ] Collect all FileResult structs into one Vector
 - [ ] Fn: Finding dupes in Vector<FileResult> to send to hashing fn
 - [ ] Fn: Hashing
 - [ ] Add mtime, ctime, and atime to FileResult so we can check to see if file changed and whether we have to hash it
      again.
+- [ ] Refactor code (Move most code out of main.rs)
   
 Testing to do:
-- [ ] Verify extension filtering is working
+- [ ] Add tests for extension filtering ]
+- [ ] Add tests for size filtering
 - [ ] Test Windows compatibility
 - [ ] Verify we handle all I/O errors appropriately

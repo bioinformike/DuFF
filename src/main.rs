@@ -116,11 +116,25 @@ fn main() {
 
     drop(tx);
 
+    // Dump the channel contents out into a vec
     for t in rx.iter() {
-        println!("{:?}", t);
+        //println!("{:?}", t);
         file_res.push(t);
     }
+
     drop(rx);
+
+    // Sort the vec
+    file_res.sort_unstable();
+
+    for x in file_res.windows(2) {
+        println!("{:?}",x);
+        if x[0] != x[1] {
+            file_res.pop
+        }
+    }
+
+
     println!("{}", file_res.len());
 }
 

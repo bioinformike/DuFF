@@ -141,12 +141,12 @@ impl Config  {
 
 
         // Specify the paths for our working files, we'll create them later.
-        let work_file = format!("{}/wl_dupe_finder_{}.working", work_dir, f_dt());
-        let hash_file = format!("{}/wl_dupe_finder_{}.hash", work_dir, f_dt());
-        let log_file = format!("{}/wl_dupe_finder_{}.log", work_dir, f_dt());
-        let temp_file = format!("{}/wl_dupe_finder_{}.temp", work_dir, f_dt());
+        let work_file = format!("{}/DuFF_{}.working", work_dir, f_dt());
+        let hash_file = format!("{}/DuFF_{}.hash", work_dir, f_dt());
+        let log_file = format!("{}/DuFF_{}.log", work_dir, f_dt());
+        let temp_file = format!("{}/DuFF_{}.temp", work_dir, f_dt());
 
-        let report_file_str = format!("{}/wl_dupe_finder_{}.report", work_dir, f_dt());
+        let report_file_str = format!("{}/DuFF_{}.report", work_dir, f_dt());
         let report_file = report_file_str.clone();
 
         Config {

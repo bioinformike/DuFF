@@ -1,9 +1,9 @@
 # yaml file setting up command line arg parsing using clap-rs.
 
-name: dupe_finder
-version: "1.0.0"
-about: "An application to find duplicate files on a filesystem. \n
-       [Report bugs at https://github.com/bioinformike/dupe_finder/issues]"
+name: DuFF
+version: "0.5.0"
+about: "DuFF [Duplicate File Finder]: An application to find duplicate files on a filesystem. \n
+       [Report bugs at https://github.com/bioinformike/DuFF/issues]"
 author: Mike Lape <lapema@mail.uc.edu>
 
 args:

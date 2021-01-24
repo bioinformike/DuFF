@@ -1,7 +1,7 @@
-# dupe_finder
+# DuFF
 
-This program can be used to find duplicate files on a filesystem.  It uses the 'ignore' crate to recursively walk a
-filesystem in parallel.
+DuFF [Duplicate File Finder] is a small program written in Rust to find duplicate files in specified directories on a 
+file system in parallel.
 
 I had originally been implementing all of this in bash, but since I wanted to learn Rust, this seemed ike a good program 
 to use to learn it!

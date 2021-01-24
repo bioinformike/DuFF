@@ -13,7 +13,7 @@ use std::path::Path;
 // Extract some info from our manifest
 pub const PROG_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const PROG_VERS: &'static str = env!("CARGO_PKG_VERSION");
-pub const PROG_ISSUES: &'static str = "https://github.com/bioinformike/dupe_finder/issues";
+pub const PROG_ISSUES: &'static str = "https://github.com/bioinformike/DuFF/issues";
 
 
 // Simple date-timestamp function, just returns date and time in following format:

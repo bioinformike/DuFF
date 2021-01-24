@@ -9,8 +9,6 @@ use crate::file_result::*;
 use std::{path::Path};
 use clap::{load_yaml, App};
 
-
-
 use crossbeam::crossbeam_channel;
 
 use walkdir;
@@ -23,7 +21,7 @@ use ring::digest::{Context, Digest, SHA256};
 fn main() {
 
     // Get user input
-    let yams = load_yaml!("../dupe_args.yml");
+    let yams = load_yaml!("../duff_args.yml");
     let matches = App::from(yams).get_matches();
 
     // Process user input

@@ -130,6 +130,22 @@ fn main() {
     dict.retain(|&k, v| v.len() > 1);
 
 
+    // Loop to push all of our FileResult structs to do hash calculation in parallel
+    for (k, v) in dict.drain() {
+        for x in v.drain(0..) {
+            // push to pool of threads to consume and:
+            // 1. Calculate hash for the file represented by FileResult
+            // 2. Update the FileResult object with the hash
+            // 3. Push the FileResult object down a channel for further processing.
+        }
+    }
+
+
+
+
+    // https://docs.rs/twox-hash/1.6.0/twox_hash/
+    // Example: https://stackoverflow.com/a/48534068
+    // Working on making sure I can actually generate a hash, this isn't actually working
     for (k,v) in dict.iter() {
         for y in v.iter() {
             let mut f = File::open(&y.file_path);

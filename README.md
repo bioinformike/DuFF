@@ -48,7 +48,7 @@ Left to implement:
 - [ ] Need to deal with issues when we traverse into same directory twice.
   <br /> ```Could definitely filter baged on path in file_res, if a path isn't unique delete all but 1 FileResult 
          instance for this path.```
-
+- [ ] Verify DuFF pasts all tests mentioned in this rmlint blog post: https://rmlint.readthedocs.io/en/latest/cautions.html
 
 
 Testing to do:

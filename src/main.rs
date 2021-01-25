@@ -6,17 +6,18 @@ use crate::util::*;
 use crate::config::*;
 use crate::file_result::*;
 
-use std::{path::Path};
+use std::{path::Path, fs::File, io};
 use clap::{load_yaml, App};
 
 use crossbeam::crossbeam_channel;
 
 use walkdir;
 use ignore;
-
+use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use ring::digest::{Context, Digest, SHA256};
-
+use twox_hash::XxHash64;
 
 fn main() {
 
@@ -116,26 +117,38 @@ fn main() {
 
     drop(tx);
 
+    let mut dict = HashMap::new();
+
     // Dump the channel contents out into a vec
     for t in rx.iter() {
-        //println!("{:?}", t);
-        file_res.push(t);
+        // Thanks to this SO answer: https://stackoverflow.com/a/33243862
+        dict.entry(t.size).or_insert(Vec::new()).push(t);
     }
 
     drop(rx);
 
-    // Sort the vec
-    file_res.sort_unstable();
+    dict.retain(|&k, v| v.len() > 1);
 
-    for x in file_res.windows(2) {
-        println!("{:?}",x);
-        if x[0] != x[1] {
-            file_res.pop
+
+    for (k,v) in dict.iter() {
+        for y in v.iter() {
+            let mut f = File::open(&y.file_path);
+
+            let hasher = XxHash64::with_seed(0);
+            let mut hw = HashWriter(hasher);
+
+            io::copy(&mut f, &mut hw).expect("Unable to copy data");
+
+            let hasher = hw.0;
+            //println!("{}", hasher.finish());
         }
     }
 
 
-    println!("{}", file_res.len());
+    println!("{}", dict.len());
+
+
+
 }
 
 

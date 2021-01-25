@@ -3,8 +3,8 @@ use std::cmp::Ordering;
 // struct to hold file information
 #[derive(Debug, Clone,Eq)]
 pub struct FileResult {
-    file_path : String,
-    size : u64,
+    pub file_path : String,
+    pub size : u64,
     hash : String
 }
 

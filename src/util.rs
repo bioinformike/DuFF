@@ -87,3 +87,21 @@ pub fn is_good_size(curr_fs: u64, min_size: u64) -> bool {
     curr_fs >= min_size
 }
 
+use std::{hash::Hasher, io};
+
+pub(crate) struct HashWriter<T: Hasher>(pub(crate) T);
+
+impl<T: Hasher> io::Write for HashWriter<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf);
+        Ok(buf.len())
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.write(buf).map(|_| ())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}

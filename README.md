@@ -34,7 +34,11 @@ Left to implement:
 - [x] It would be nice if printing --size out was pretty (converted into best size for printing)
 - [x] Collect all FileResult structs into one Vector
   <br />```Being stored in file_res```
-- [ ] Fn: Finding dupes in Vector<FileResult> to send to hashing fn
+- [x] Fn: Finding dupes in Vector<FileResult> to send to hashing fn
+  <br />
+  ```
+  # Switched over to using a hashmap of vectors of FileResult
+   ```
 - [ ] Fn: Hashing
 - [ ] Add mtime, ctime, and atime to FileResult so we can check to see if file changed and whether we have to hash it
      again.

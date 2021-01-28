@@ -1,7 +1,26 @@
-# DuFF
+#  DuFF [Duplicate File Finder] 
 
-DuFF [Duplicate File Finder] is a small program written in Rust to find duplicate files in specified directories on a 
-file system in parallel.
+## About 
+<img align="right" width="112" height="200" alt="DuFF Logo" src="https://freepngimg.com/thumb/cartoon/81024-homer-art-area-duffman-marge-simpson.png">DuFF [Duplicate File Finder] is a 
+small program written in Rust to find duplicate files in specified directories on a file system in parallel.
+<br />
+DuFF features:
+- Size filtering [min, max, or both!]
+- Extension filtering
+- Parallel processing
+
+## Table of Contents
+<!-- ⛔️ MD-MAGIC-EXAMPLE:START (TOC:collapse=true&collapseText=Click to expand) -->
+<details>
+<summary>Click to expand</summary>
+- [About](#about)
+- [Install](#install)
+- [Usage](#usage)
+  * [API](#api)
+  * [Configuration Options](#configuration-options)
+- [CLI Usage](#cli-usage)
+</details>
+<!-- ⛔️ MD-MAGIC-EXAMPLE:END -->
 
 I had originally been implementing all of this in bash, but since I wanted to learn Rust, this seemed ike a good program 
 to use to learn it!
@@ -31,6 +50,7 @@ Left to implement:
 - [ ] Switch all errors to print to stderr
 - [x] Add extension limiting functionality --ext
 - [x] Add size limiting functionality --size
+- [ ] Replace size limiting with --ul --ll for upper limit and lower limit and support both at the same time.
 - [x] It would be nice if printing --size out was pretty (converted into best size for printing)
 - [x] Collect all FileResult structs into one Vector
   <br />```Being stored in file_res```

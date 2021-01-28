@@ -52,8 +52,9 @@ impl Config  {
 
         let mut work_dir = String::from("");
 
-        // min size requirement, default 250MB = 250,000,000 Bytes
-        let in_size = 250_000_000;
+        // min and max size requirement
+        let ll = 0;
+        let ul = ;
 
         // Number of jobs to use
         let mut jobs = 1;
@@ -80,9 +81,15 @@ impl Config  {
         // Deal with arguments
 
         // Minimum size specification in bytes!
-        if let Some(in_size) = in_args.value_of("size") {
-            let in_size = in_args.value_of("size").unwrap();
-            let in_size = in_size.parse::<u64>();
+        if let Some(ll) = in_args.value_of("lower_lim") {
+            let ll_size = in_args.value_of("lower_lim").unwrap();
+            let ll_size = ll_size.parse::<u64>();
+        }
+
+        // Minimum size specification in bytes!
+        if let Some(ul) = in_args.value_of("upper_lim") {
+            let ul_size = in_args.value_of("upper_lim").unwrap();
+            let ul_size = ul_size.parse::<u64>();
         }
 
         if let Some(n_jobs) = in_args.value_of("jobs") {

@@ -83,7 +83,11 @@ pub fn is_good_ext(curr_dir: &Path, curr_exts: &Vec<String>) -> bool {
 // Checks if the size of the file input as curr_fs is greater than or equal to the requested
 // minimum file size.  This could have been left in the main code but pulling it out seemed
 // cleaner to me.
-pub fn is_good_size(curr_fs: u64, min_size: u64) -> bool {
-    curr_fs >= min_size
+pub fn is_good_size(curr_fs: u64, min_size: u64, max_size: u64) -> bool {
+
+    // Make sure curr_fs is gt or eq to min_size(default = 0B) AND is lt or eq to max_size (default
+    // = ~18EB)
+    ((curr_fs >= min_size) & (curr_fs <= max_size))
+
 }
 

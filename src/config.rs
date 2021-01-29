@@ -16,7 +16,8 @@ pub struct Config {
     pub have_hash : bool,
     pub user_set_dir : bool,
     pub res_file : String,
-    pub size     : u64,
+    pub ll_size     : u64,
+    pub ul_size     : u64,
     pub jobs     : u64,
 
     pub work_dir : String,
@@ -52,9 +53,12 @@ impl Config  {
 
         let mut work_dir = String::from("");
 
-        // min and max size requirement
-        let ll = 0;
-        let ul = ;
+        // min and max size requirement, default for lower will just be 0, so we can use that
+        // even if the user doesn't specify one.  Upper lim will use indicator of
+        // 18446744073709551615 which is largest number u64 can hold and would be equal to  ~18EB
+        // sooo we should not have to worry about this.
+        let mut ll_size = 0;
+        let mut ul_size = 18446744073709551615;
 
         // Number of jobs to use
         let mut jobs = 1;
@@ -82,14 +86,29 @@ impl Config  {
 
         // Minimum size specification in bytes!
         if let Some(ll) = in_args.value_of("lower_lim") {
-            let ll_size = in_args.value_of("lower_lim").unwrap();
-            let ll_size = ll_size.parse::<u64>();
+            match ll.parse::<u64>() {
+                Ok(n) => ll_size = n,
+                Err(_e) => {
+                    let err_str = format!("Lower size limit, {}B, is not a valid value!",
+                                          ll);
+                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    process::exit(1);
+                },
+            }
         }
+
 
         // Minimum size specification in bytes!
         if let Some(ul) = in_args.value_of("upper_lim") {
-            let ul_size = in_args.value_of("upper_lim").unwrap();
-            let ul_size = ul_size.parse::<u64>();
+            match ul.parse::<u64>() {
+                Ok(n) => ul_size = n,
+                Err(_e) => {
+                    let err_str = format!("Upper size limit, {}B, is not a valid value!",
+                                          ul);
+                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    process::exit(1);
+                },
+            }
         }
 
         if let Some(n_jobs) = in_args.value_of("jobs") {
@@ -106,7 +125,7 @@ impl Config  {
 
 
         // Extensions to search for, comma separated values.
-        if let Some(_in_exts) = in_args.value_of("exts") {
+        if let Some(in_exts) = in_args.value_of("exts") {
             let in_exts = in_args.value_of("exts").unwrap();
             exts = in_exts.split(',').map(|s| s.to_string()).collect();
         }
@@ -160,7 +179,8 @@ impl Config  {
             search_path: path_vec,
             exts: exts,
 
-            size: in_size,
+            ll_size: ll_size,
+            ul_size: ul_size,
             jobs: jobs,
 
             archive: is_arch,
@@ -185,7 +205,6 @@ impl Config  {
     }
 
     pub fn print(&self) {
-        let size_str = converter::convert(self.size as f64);
 
         let border_str = "=".repeat(textwrap::termwidth());
         println!("{}", border_str);
@@ -194,7 +213,19 @@ impl Config  {
         println!("{:<40} {:>1}", "Status:", "New Run" );
         println!("{:<40} {:>1}", "Search Directories:", self.search_path.join(","));
         println!("{:<40} {:>1}", "Extensions:", self.exts.join(", "));
-        println!("{:<40} {:>1}", "Size Threshold:", size_str );
+
+        // If they set a lower lim
+        if self.ll_size > 0 {
+            let ll_str = converter::convert(self.ll_size as f64);
+            println!("{:<40} {:>1}", "Minimum Size:", ll_str );
+
+        }
+        // If they set a upper lim
+        if self.ul_size < 18446744073709551615 {
+            let ul_str = converter::convert(self.ul_size as f64);
+            println!("{:<40} {:>1}", "Maximum Size:", ul_str);
+        }
+
         println!("{:<40} {:>1}", "Number of Threads:", self.jobs);
         println!("{:<40} {:>1}", "Working Directory:", self.work_dir);
         println!("{:<40} {:>1}", "Final Report:", self.report_file);

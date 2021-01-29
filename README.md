@@ -50,7 +50,7 @@ Left to implement:
 - [ ] Switch all errors to print to stderr
 - [x] Add extension limiting functionality --ext
 - [x] Add size limiting functionality --size
-- [ ] Replace size limiting with --ul --ll for upper limit and lower limit and support both at the same time.
+- [x] Replace size limiting with --ul --ll for upper limit and lower limit and support both at the same time.
 - [x] It would be nice if printing --size out was pretty (converted into best size for printing)
 - [x] Collect all FileResult structs into one Vector
   <br />```Being stored in file_res```

@@ -23,6 +23,8 @@ use xxhash_rust;
 
 use std::hash::Hasher;
 use std::io::{BufRead, BufReader};
+use std::process::exit;
+use twox_hash::xxh3::HasherExt;
 
 
 fn main() {
@@ -112,7 +114,7 @@ fn main() {
             // only want to send something down the channel if its a file and meets our extension
             // and size requirements.
             let ext_match = is_good_ext(curr_path, &conf.exts);
-            let size_match = is_good_size(fs, conf.size);
+            let size_match = is_good_size(fs, conf.ll_size, conf.ul_size);
             if ext_match && size_match  {
                 tx.send(FileResult::new(path_str, fs)).unwrap();
             }
@@ -135,7 +137,10 @@ fn main() {
 
     dict.retain(|&k, v| v.len() > 1);
 
-
+    if dict.len() == 0 {
+        println!("No duplicate files!");
+        exit(0)
+    }
     // Loop to push all of our FileResult structs to do hash calculation in parallel
 /*    for (k, v) in dict.drain() {
         for x in v.drain(0..) {
@@ -166,6 +171,7 @@ fn main() {
         }
     }*/
 
+
     //let arg = "/home/mike/Desktop/dupe_test/F169B7F6-B870-6C63-46D0-B787297443E2.fastq.bz2";
     let arg = "/etc/hosts";
     let f = File::open(arg).unwrap();
@@ -186,7 +192,7 @@ fn main() {
         f.consume(consumed);
     }
 
-    println!("{:16x}   {}", hasher.finish(), arg);
+    println!("{:16x}   {}", hasher.finish_ext(), arg);
 
 
     println!("{}", dict.len());

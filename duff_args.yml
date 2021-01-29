@@ -23,15 +23,15 @@ args:
       takes_value: true
 
   - lower_lim:
-      help: Minimum size files must be to examine [bytes
-      short: ll
+      help: Minimum size files must be to examine [bytes].
+      short: l
       long: lowlim
       multiple: false
       takes_value: true
 
   - upper_lim:
       help: Maximum size files can be before we no longer examine them [bytes].
-      short: ul
+      short: u
       long: uplim
       multiple: false
       takes_value: true

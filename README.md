@@ -1,7 +1,7 @@
 #  DuFF [Duplicate File Finder] 
 
 ## About 
-<img align="right" width="112" height="200" alt="DuFF Logo" src="misc/duffmann.png">DuFF [Duplicate File Finder] is a 
+<img align="right" width="112" height="200" src="https://github.com/bioinformike/DuFF/blob/main/misc/duffman.png">DuFF [**Du**plicate **F**ile **F**inder] is a 
 small program written in Rust to find duplicate files in specified directories on a file system in parallel.
 <br />
 DuFF features:

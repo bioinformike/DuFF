@@ -15,6 +15,7 @@ use walkdir;
 use ignore;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use ring::digest::{Context, Digest, SHA256};
 use twox_hash::XxHash64;
@@ -157,22 +158,38 @@ fn main() {
     // https://docs.rs/twox-hash/1.6.0/twox_hash/
     // Example: https://stackoverflow.com/a/48534068
     // Working on making sure I can actually generate a hash, this isn't actually working
- /*   for (k,v) in dict.iter() {
+    for (k,v) in dict.iter() {
         for y in v.iter() {
-            let mut f = File::open(&y.file_path);
+            let start = Instant::now();
+            let mut f = File::open(&y.file_path).unwrap();
 
-            let hasher = XxHash64::with_seed(0);
-            let mut hw = HashWriter(hasher);
+            // 128 KiB
+            let mut f = BufReader::with_capacity(131072, f);
+            //let mut f = BufReader::new(f);
+            println!("{}", f.capacity());
 
-            io::copy(&mut f, &mut hw).expect("Unable to copy data");
+            let mut hasher = xxh3::Hash128::default();
+            loop {
+                let consumed = {
+                    let bytes = f.fill_buf().unwrap();
+                    if bytes.is_empty() {
+                        break;
+                    }
+                    hasher.write(bytes);
+                    bytes.len()
+                };
+                f.consume(consumed);
+            }
+            let hash = hasher.finish_ext();
+            let duration = start.elapsed();
 
-            let hasher = hw.0;
-            //println!("{}", hasher.finish());
+            println!("[{:?}] {}   {}", duration, hash, &y.file_path);
+
         }
-    }*/
+    }
 
 
-    //let arg = "/home/mike/Desktop/dupe_test/F169B7F6-B870-6C63-46D0-B787297443E2.fastq.bz2";
+/*    //let arg = "/home/mike/Desktop/dupe_test/F169B7F6-B870-6C63-46D0-B787297443E2.fastq.bz2";
     let arg = "/etc/hosts";
     let f = File::open(arg).unwrap();
     let mut f = BufReader::new(f);
@@ -196,7 +213,7 @@ fn main() {
 
 
     println!("{}", dict.len());
-
+*/
 
 
 }

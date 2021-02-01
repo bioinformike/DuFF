@@ -2,6 +2,7 @@ use crate::util::*;
 
 use std::{process,env};
 use pretty_bytes::converter;
+use byte_unit::{Byte, ByteUnit};
 use clap::ArgMatches;
 
 
@@ -16,8 +17,8 @@ pub struct Config {
     pub have_hash : bool,
     pub user_set_dir : bool,
     pub res_file : String,
-    pub ll_size     : u64,
-    pub ul_size     : u64,
+    pub ll_size     : u128,
+    pub ul_size     : u128,
     pub jobs     : u64,
 
     pub work_dir : String,
@@ -58,7 +59,7 @@ impl Config  {
         // 18446744073709551615 which is largest number u64 can hold and would be equal to  ~18EB
         // sooo we should not have to worry about this.
         let mut ll_size = 0;
-        let mut ul_size = 18446744073709551615;
+        let mut ul_size = 340282366920938463463374607431768211455;
 
         // Number of jobs to use
         let mut jobs = 1;
@@ -86,30 +87,30 @@ impl Config  {
 
         // Minimum size specification in bytes!
         if let Some(ll) = in_args.value_of("lower_lim") {
-            match ll.parse::<u64>() {
-                Ok(n) => ll_size = n,
-                Err(_e) => {
-                    let err_str = format!("Lower size limit, {}B, is not a valid value!",
-                                          ll);
+            match Byte::from_str(ll) {
+                Ok(n) => ll_size = n.get_bytes(),
+                Err(e) => {
+                    let err_str = format!("Lower size limit {}: {}!",
+                                          ll, e.to_string());
                     println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
                     process::exit(1);
                 },
             }
         }
 
-
-        // Minimum size specification in bytes!
+        // Max file size value
         if let Some(ul) = in_args.value_of("upper_lim") {
-            match ul.parse::<u64>() {
-                Ok(n) => ul_size = n,
-                Err(_e) => {
-                    let err_str = format!("Upper size limit, {}B, is not a valid value!",
-                                          ul);
+            match Byte::from_str(ul) {
+                Ok(n) => ul_size = n.get_bytes(),
+                Err(e) => {
+                    let err_str = format!("Lower size limit {}: {}!",
+                                          ul, e.to_string());
                     println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
                     process::exit(1);
                 },
             }
         }
+
 
         if let Some(n_jobs) = in_args.value_of("jobs") {
             match n_jobs.parse::<u64>() {
@@ -221,7 +222,7 @@ impl Config  {
 
         }
         // If they set a upper lim
-        if self.ul_size < 18446744073709551615 {
+        if self.ul_size < 340282366920938463463374607431768211455 {
             let ul_str = converter::convert(self.ul_size as f64);
             println!("{:<40} {:>1}", "Maximum Size:", ul_str);
         }

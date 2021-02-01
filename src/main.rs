@@ -10,22 +10,16 @@ use std::{path::Path, fs::File, io};
 use clap::{load_yaml, App};
 
 use crossbeam::crossbeam_channel;
-
+//use itertools::Itertools;
 use walkdir;
 use ignore;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use ring::digest::{Context, Digest, SHA256};
-use twox_hash::XxHash64;
-use twox_hash::xxh3;
-use xxhash_rust;
-
-use std::hash::Hasher;
-use std::io::{BufRead, BufReader};
 use std::process::exit;
-use twox_hash::xxh3::HasherExt;
+use rayon::prelude::*;
+
 
 
 fn main() {
@@ -110,14 +104,18 @@ fn main() {
                 }
             };
 
-            let fs = curr_meta.len();
+            let mtime = curr_meta.modified().unwrap();
+
+
+
+            let fs = u128::from(curr_meta.len());
 
             // only want to send something down the channel if its a file and meets our extension
             // and size requirements.
             let ext_match = is_good_ext(curr_path, &conf.exts);
             let size_match = is_good_size(fs, conf.ll_size, conf.ul_size);
             if ext_match && size_match  {
-                tx.send(FileResult::new(path_str, fs)).unwrap();
+                tx.send(FileResult::new(path_str, fs, mtime)).unwrap();
             }
 
             Continue
@@ -142,6 +140,7 @@ fn main() {
         println!("No duplicate files!");
         exit(0)
     }
+
     // Loop to push all of our FileResult structs to do hash calculation in parallel
 /*    for (k, v) in dict.drain() {
         for x in v.drain(0..) {
@@ -153,67 +152,56 @@ fn main() {
     }*/
 
 
+    let (tx, rx) = crossbeam_channel::unbounded::<FileResult>();
 
+    let flat: Vec<_> = dict.values().collect();
+    let mut flat: Vec<_> = flat.into_iter().flatten().cloned().collect::<Vec<_>>();
 
-    // https://docs.rs/twox-hash/1.6.0/twox_hash/
-    // Example: https://stackoverflow.com/a/48534068
-    // Working on making sure I can actually generate a hash, this isn't actually working
-    for (k,v) in dict.iter() {
-        for y in v.iter() {
-            let start = Instant::now();
-            let mut f = File::open(&y.file_path).unwrap();
+/*//                        1 KiB  8 KiB 128KiB 256KiB  512KiB  1MiB, 8MiB, 16MiB, 32MiB]
+    let mut sizes = [1024, 8192, 131072, 262144, 524288, 1048576, 8388608,
+                              16777216, 33554432];
+        for z in 0..sizes.len() {
+            flat.par_iter_mut().for_each( |x| {
 
-            // 128 KiB
-            let mut f = BufReader::with_capacity(131072, f);
-            //let mut f = BufReader::new(f);
-            println!("{}", f.capacity());
+                let start = Instant::now();
+                x.calc_hash(sizes[z]);
+                tx.send(x.to_owned()).unwrap();
 
-            let mut hasher = xxh3::Hash128::default();
-            loop {
-                let consumed = {
-                    let bytes = f.fill_buf().unwrap();
-                    if bytes.is_empty() {
-                        break;
-                    }
-                    hasher.write(bytes);
-                    bytes.len()
-                };
-                f.consume(consumed);
-            }
-            let hash = hasher.finish_ext();
-            let duration = start.elapsed();
+                let duration = start.elapsed();
+                println ! ("{:?}, {:?}, {}, {},  {}", duration, sizes[z], & x.hash, &x.size, & x.file_path);
+            });
+    }*/
 
-            println!("[{:?}] {}   {}", duration, hash, &y.file_path);
+    flat.par_iter_mut().for_each( |x| {
 
-        }
+        let start = Instant::now();
+        x.calc_hash(8192);
+        tx.send(x.to_owned()).unwrap();
+
+        let duration = start.elapsed();
+        println ! ("{:?}, {:?}, {}, {},  {}", duration, 8192, & x.hash, &x.size, & x.file_path);
+    });
+
+    // Slide modification of what we did above after the directory walking
+    let mut dict = HashMap::new();
+
+    drop(tx);
+
+    // Dump the channel contents out into a vec
+    for t in rx.iter() {
+        let key = format!("{}_{}", t.size, t.hash);
+
+        dict.entry(key).or_insert(Vec::new()).push(t);
     }
 
+    //drop(rx);
 
-/*    //let arg = "/home/mike/Desktop/dupe_test/F169B7F6-B870-6C63-46D0-B787297443E2.fastq.bz2";
-    let arg = "/etc/hosts";
-    let f = File::open(arg).unwrap();
-    let mut f = BufReader::new(f);
+    dict.retain(|k, v| v.len() > 1);
 
-    let mut hasher = xxh3::Hash128::default();
-    //let mut hasher = xxhash_rust::xxh3::Xxh3::new();
-    //let hasher = XxHash64::with_seed(0);
-    loop {
-        let consumed = {
-            let bytes = f.fill_buf().unwrap();
-            if bytes.is_empty() {
-                break;
-            }
-            hasher.write(bytes);
-            bytes.len()
-        };
-        f.consume(consumed);
+    if dict.len() == 0 {
+        println!("No duplicate files!");
+        exit(0)
     }
-
-    println!("{:16x}   {}", hasher.finish_ext(), arg);
-
-
-    println!("{}", dict.len());
-*/
 
 
 }

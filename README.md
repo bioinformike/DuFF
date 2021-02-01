@@ -59,9 +59,10 @@ Left to implement:
   ```
   # Switched over to using a hashmap of vectors of FileResult
    ```
-- [ ] Fn: Hashing
-- [ ] Add mtime, ctime, and atime to FileResult so we can check to see if file changed and whether we have to hash it
+- [x] Fn: Hashing
+- [x] Add mtime, ctime, and atime to FileResult so we can check to see if file changed and whether we have to hash it
      again.
+  <br /> ```Added mtime to FileResult, the others probably aren't needed.```
 - [x] Refactor code (Move most code out of main.rs)
 - [x] Deal with cargo warnings
   <br /> ```Still some warnings left but all for unused variables that I will in future code.```
@@ -69,7 +70,9 @@ Left to implement:
   <br /> ```Could definitely filter baged on path in file_res, if a path isn't unique delete all but 1 FileResult 
          instance for this path.```
 - [ ] Verify DuFF pasts all tests mentioned in this rmlint blog post: https://rmlint.readthedocs.io/en/latest/cautions.html
-
+- [ ] Need to add output and logging.
+- [ ] Progress bar functionality?
+- [ ] Resume functionality
 
 Testing to do:
 - [ ] Add tests for extension filtering ]

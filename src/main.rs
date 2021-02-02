@@ -10,7 +10,6 @@ use std::{path::Path, fs::File, io};
 use clap::{load_yaml, App};
 
 use crossbeam::crossbeam_channel;
-//use itertools::Itertools;
 use walkdir;
 use ignore;
 use std::cmp::Ordering;
@@ -18,11 +17,21 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use std::process::exit;
-use rayon::prelude::*;
+use rayon::iter::{ParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
+use indicatif::{ParallelProgressIterator, ProgressStyle, ProgressBar, ProgressDrawTarget};
 
+use console::{Emoji, style};
 
-
+static LOOKING_GLASS: Emoji = Emoji("🔍", "");
+static ROCKET: Emoji = Emoji("🚀", "");
+static SCALES: Emoji = Emoji("🧭", "");
+static TREE: Emoji = Emoji("🌴", "");
+static ROBOT: Emoji = Emoji("🤖", "");
+static MONOCLE: Emoji = Emoji("🧐", "");
+static CLAPPER: Emoji = Emoji("🎬", "");
+static REPORT: Emoji = Emoji("📃️", "");
 fn main() {
+
 
     // Get user input
     let yams = load_yaml!("../duff_args.yml");
@@ -31,6 +40,17 @@ fn main() {
     // Process user input
     let conf = Config::new(matches);
 
+    let spinner_style = ProgressStyle::default_spinner()
+        .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+        .template("{prefix:.bold.dim} {spinner} {wide_msg}");
+
+    if conf.prog {
+        println!("[{}, {}] {} Initializing DuFF...",
+                 dt(),
+                 style("01/11").bold().dim(),
+                 ROCKET
+        );
+    }
     // Try creating our files and if we can't tell the user that we don't have the write
     // permissions we need for either the directory they specified or cwd
     let work_file = open_file(&conf.work_file, &conf.work_dir,
@@ -65,6 +85,14 @@ fn main() {
     }
     walker.threads(conf.jobs as usize);
     let walker = walker.build_parallel();
+
+    if conf.prog {
+        println!("[{}, {}] {} Searching requested directories...",
+                 dt(),
+                 style("02/11").bold().dim(),
+                 LOOKING_GLASS
+        );
+    }
 
     walker.run(|| {
         let tx = tx.clone();
@@ -126,6 +154,14 @@ fn main() {
 
     let mut dict = HashMap::new();
 
+    if conf.prog {
+        println!("[{}, {}] {} Building file size tree...",
+                 dt(),
+                 style("03/11").bold().dim(),
+                 TREE
+        );
+    }
+
     // Dump the channel contents out into a vec
     for t in rx.iter() {
         // Thanks to this SO answer: https://stackoverflow.com/a/33243862
@@ -134,6 +170,14 @@ fn main() {
 
     drop(rx);
 
+    if conf.prog {
+        println!("[{}, {}] {} Identifying duplicate files by size...",
+                 dt(),
+                 style("04/11").bold().dim(),
+                 SCALES
+        );
+    }
+
     dict.retain(|&k, v| v.len() > 1);
 
     if dict.len() == 0 {
@@ -141,16 +185,14 @@ fn main() {
         exit(0)
     }
 
-    // Loop to push all of our FileResult structs to do hash calculation in parallel
-/*    for (k, v) in dict.drain() {
-        for x in v.drain(0..) {
-            // push to pool of threads to consume and:
-            // 1. Calculate hash for the file represented by FileResult
-            // 2. Update the FileResult object with the hash
-            // 3. Push the FileResult object down a channel for further processing.
-        }
-    }*/
-
+    if conf.prog {
+        println!("[{}, {}] {} Found {} duplicate files by size...",
+                 dt(),
+                 style("05/11").bold().dim(),
+                 MONOCLE,
+                 dict.len()
+        );
+    }
 
     let (tx, rx) = crossbeam_channel::unbounded::<FileResult>();
 
@@ -172,20 +214,53 @@ fn main() {
             });
     }*/
 
-    flat.par_iter_mut().for_each( |x| {
+    if conf.prog {
+        println!("[{}, {}] {} Calculating hashes for all duplicate files...",
+                 dt(),
+                 style("06/11").bold().dim(),
+                 ROBOT,
+        );
+    }
 
-        let start = Instant::now();
-        x.calc_hash(8192);
-        tx.send(x.to_owned()).unwrap();
+    if conf.prog {
+        let pb = ProgressBar::with_draw_target(flat.len() as u64,
+                                               ProgressDrawTarget::stdout());
 
-        let duration = start.elapsed();
-        println ! ("{:?}, {:?}, {}, {},  {}", duration, 8192, & x.hash, &x.size, & x.file_path);
-    });
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{percent}%, {elapsed_precise}] [{bar:60.cyan/blue}] {pos:>7}/{len:7} ({eta})")
+            .progress_chars("#>-"));
+
+        flat.par_iter_mut().progress_with(pb).for_each(|x| {
+            let start = Instant::now();
+            x.calc_hash(8192);
+            tx.send(x.to_owned()).unwrap();
+
+            let duration = start.elapsed();
+            //println ! ("{:?}, {:?}, {}, {},  {}", duration, 8192, & x.hash, &x.size, & x.file_path);
+        });
+    } else
+    {
+        flat.par_iter_mut().for_each(|x| {
+            let start = Instant::now();
+            x.calc_hash(8192);
+            tx.send(x.to_owned()).unwrap();
+
+            let duration = start.elapsed();
+        });
+    }
 
     // Slide modification of what we did above after the directory walking
     let mut dict = HashMap::new();
 
     drop(tx);
+
+    if conf.prog {
+        println!("[{}, {}] {} Building hash tree...",
+                 dt(),
+                 style("07/11").bold().dim(),
+                 TREE
+        );
+    }
 
     // Dump the channel contents out into a vec
     for t in rx.iter() {
@@ -194,13 +269,46 @@ fn main() {
         dict.entry(key).or_insert(Vec::new()).push(t);
     }
 
-    //drop(rx);
+    drop(rx);
+
+    if conf.prog {
+        println!("[{}, {}] {} Identifying duplicate files by hash...",
+                 dt(),
+                 style("08/11").bold().dim(),
+                 SCALES
+        );
+    }
 
     dict.retain(|k, v| v.len() > 1);
 
     if dict.len() == 0 {
         println!("No duplicate files!");
         exit(0)
+    }
+
+    if conf.prog {
+        println!("[{}, {}] {} Found {} duplicate files.",
+                 dt(),
+                 style("09/11").bold().dim(),
+                 MONOCLE,
+                 dict.len()
+        );
+    }
+
+    if conf.prog {
+        println!("[{}, {}] {} Wrapping up...",
+                 dt(),
+                 style("10/11").bold().dim(),
+                 CLAPPER,
+        );
+    }
+
+    if conf.prog {
+        println!("[{}, {}] {} Writing report...",
+                 dt(),
+                 style("11/11").bold().dim(),
+                 REPORT,
+        );
     }
 
 

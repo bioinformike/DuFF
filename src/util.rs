@@ -21,7 +21,7 @@ pub const PROG_ISSUES: &'static str = "https://github.com/bioinformike/DuFF/issu
 // Includes the square brackets
 pub fn dt() -> String {
     let now: DateTime<Utc> = Utc::now();
-    String::from(format!("[{}]", now.format("%Y-%m-%d %H:%M:%S")))
+    String::from(format!("{}", now.format("%Y-%m-%d %H:%M:%S")))
 }
 
 // Date-timestamp with hyphens replaced with underscores for easier reading in filenames

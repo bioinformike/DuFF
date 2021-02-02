@@ -15,13 +15,6 @@ args:
       takes_value: true
       required: true
 
-  - size:
-      help: How large do files have to be to check in bytes? (default > 250,000,000 [250MB])
-      short: s
-      long: size
-      multiple: false
-      takes_value: true
-
   - lower_lim:
       help: Minimum size files must be to examine [bytes].
       short: l
@@ -38,8 +31,8 @@ args:
 
   - work_dir:
       help: Where script should store intermediate data (default is cwd)
-      short: f
-      long: file
+      short: w
+      long: work
       multiple: false
       takes_value: true
 
@@ -58,7 +51,7 @@ args:
       takes_value: true
 
   - hash:
-      help: Path to file containing previously computed Blake3 16 byte hashes
+      help: Path to file containing previously computed hashes
       short: x
       long: hash
       multiple: false

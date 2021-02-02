@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::fs::File;
-use std::time;
+use std::{time, fmt};
 use std::io::{BufReader, BufRead};
 
 use std::hash::Hasher;
@@ -12,12 +12,12 @@ use twox_hash::xxh3::{Hash128, HasherExt};
 pub struct FileResult {
     pub file_path : String,
     pub size : u128,
-    pub mtime: time::SystemTime,
+    pub mtime: u64,
     pub hash : String
 }
 
 impl FileResult {
-    pub fn new(file_path: String, size: u128, mtime: time::SystemTime) -> FileResult {
+    pub fn new(file_path: String, size: u128, mtime: u64) -> FileResult {
         FileResult {file_path, size, mtime, hash : String::new()}
     }
 
@@ -55,6 +55,16 @@ impl FileResult {
     }
 }
 
+impl fmt::Display for FileResult {
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        write!(f, "{} {} {} {}", self.size, self.hash, self.mtime, self.file_path)
+    }
+}
 
 // Adapted from SO answer: https://stackoverflow.com/a/29884582
 impl Ord for FileResult {

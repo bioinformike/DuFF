@@ -14,13 +14,14 @@ use walkdir;
 use ignore;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use std::process::exit;
 use rayon::iter::{ParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
 use indicatif::{ParallelProgressIterator, ProgressStyle, ProgressBar, ProgressDrawTarget};
 
 use console::{Emoji, style};
+use std::io::Write;
 
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
 static ROCKET: Emoji = Emoji("🚀", "");
@@ -63,8 +64,8 @@ fn main() {
     let temp_file = open_file(&conf.temp_file, &conf.work_dir,
                               conf.user_set_dir);
 
-    let report_file = open_file(&conf.report_file, &conf.work_dir,
-                                conf.user_set_dir);
+    let mut report_file = open_file(&conf.report_file, &conf.work_dir,
+                                    conf.user_set_dir);
 
 
     conf.print();
@@ -84,9 +85,9 @@ fn main() {
     walker.threads(conf.jobs as usize);
     let walker = walker.build_parallel();
 
+    let mut spin = ProgressBar::new_spinner();
 
     if conf.prog {
-        let spin = ProgressBar::new_spinner();
         spin.set_draw_target(ProgressDrawTarget::stdout());
         spin.enable_steady_tick(120);
         spin.set_style(
@@ -110,7 +111,10 @@ fn main() {
                                  LOOKING_GLASS));
     }
     walker.run( || {
-        spin.inc(1);
+
+        if conf.prog {
+            spin.inc(1);
+        }
         let tx = tx.clone();
         let conf = conf.clone();
         Box::new(move |result| {
@@ -148,9 +152,13 @@ fn main() {
                 }
             };
 
-            let mtime = curr_meta.modified().unwrap();
+            let m = curr_meta.modified().unwrap();
+            let mut mtime;
 
-
+            match m.duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(n) => mtime =  n.as_secs(),
+                Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+            }
 
             let fs = u128::from(curr_meta.len());
 
@@ -196,7 +204,13 @@ fn main() {
 
     dict.retain(|&k, v| v.len() > 1);
 
-    if dict.len() == 0 {
+    let mut ndupes = 0;
+
+    for (_, v) in dict.iter() {
+        ndupes += v.len();
+    }
+
+    if ndupes == 0 {
         println!("No duplicate files!");
         exit(0)
     }
@@ -206,7 +220,7 @@ fn main() {
                  dt(),
                  style("05/11").bold().dim(),
                  MONOCLE,
-                 dict.len()
+                 ndupes
         );
     }
 
@@ -297,17 +311,24 @@ fn main() {
 
     dict.retain(|_, v| v.len() > 1);
 
-    if dict.len() == 0 {
+    let mut ndupes = 0;
+
+    for (_, v) in dict.iter() {
+        ndupes += v.len();
+    }
+
+    if ndupes == 0 {
         println!("No duplicate files!");
         exit(0)
     }
+
 
     if conf.prog {
         println!("[{}, {}] {} Found {} duplicate files.",
                  dt(),
                  style("09/11").bold().dim(),
                  MONOCLE,
-                 dict.len()
+                 ndupes
         );
     }
 
@@ -325,6 +346,14 @@ fn main() {
                  style("11/11").bold().dim(),
                  REPORT,
         );
+
+        // write the header line
+        writeln!(report_file, "size hash mtime path");
+        for (k, v) in dict.iter() {
+            for y in v.iter() {
+                writeln!(report_file, "{}", y);
+            }
+        }
     }
 
 

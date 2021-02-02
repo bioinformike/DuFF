@@ -71,11 +71,12 @@ Left to implement:
          instance for this path.```
 - [ ] Verify DuFF pasts all tests mentioned in this rmlint blog post: https://rmlint.readthedocs.io/en/latest/cautions.html
 - [ ] Need to add output and logging.
-- [ ] Progress bar functionality?
+- [x] Progress bar functionality
+  <br /> ```Implemented, -p flag required to show progress ```
 - [ ] Resume functionality
 
 Testing to do:
-- [ ] Add tests for extension filtering ]
+- [ ] Add tests for extension filtering 
 - [ ] Add tests for size filtering
 - [ ] Test Windows compatibility
 - [ ] Verify we handle all I/O errors appropriately

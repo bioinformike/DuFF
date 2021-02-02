@@ -1,6 +1,6 @@
 use crate::util::*;
 
-use std::{process,env};
+use std::{process, env, fs};
 use pretty_bytes::converter;
 use byte_unit::{Byte, ByteUnit};
 use clap::ArgMatches;
@@ -67,8 +67,29 @@ impl Config  {
         // Extension string
         let mut exts: Vec<String> = vec![String::from("*")];
 
+
         let paths = in_args.value_of("dir").unwrap();
         let path_vec: Vec<String> = paths.split(',').map(|s| s.to_string()).collect();
+
+        // Check each dir handed in to make sure its accessible and a directory.
+        for x in path_vec.iter() {
+            match fs::metadata(x) {
+                Ok(m) => {
+                    if m.is_dir() == false {
+                        let err_str = format!("Specified directory {} is not a directory!",
+                                              x);
+                        eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                        process::exit(1);
+                    }
+                },
+                Err(e) => {
+                    let err_str = format!("There was an error with the specified directory, {}: {}!",
+                                          x, e.to_string());
+                    eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    process::exit(1);
+                }
+            }
+        }
 
         // Deal with our flag options
         if in_args.is_present("archive") {
@@ -92,7 +113,7 @@ impl Config  {
                 Err(e) => {
                     let err_str = format!("Lower size limit {}: {}!",
                                           ll, e.to_string());
-                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
                     process::exit(1);
                 },
             }
@@ -105,7 +126,7 @@ impl Config  {
                 Err(e) => {
                     let err_str = format!("Lower size limit {}: {}!",
                                           ul, e.to_string());
-                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
                     process::exit(1);
                 },
             }
@@ -118,7 +139,7 @@ impl Config  {
                 Err(_e) => {
                     let err_str = format!("Number of jobs specificed, {}, is not a valid number!",
                                           n_jobs);
-                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
                     process::exit(1);
                 },
             }
@@ -158,7 +179,7 @@ impl Config  {
                     let err_str = format!("Could not use current working directory, please specify where {} can \
                               store temporary files and the final report using the -f (--file) \
                               argument. \nError text: {}", PROG_NAME.to_owned() + PROG_VERS, e);
-                    println!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
 
                     std::process::exit(1);
                 }

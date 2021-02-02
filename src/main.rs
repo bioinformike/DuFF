@@ -30,6 +30,7 @@ static ROBOT: Emoji = Emoji("🤖", "");
 static MONOCLE: Emoji = Emoji("🧐", "");
 static CLAPPER: Emoji = Emoji("🎬", "");
 static REPORT: Emoji = Emoji("📃️", "");
+
 fn main() {
 
 
@@ -40,9 +41,6 @@ fn main() {
     // Process user input
     let conf = Config::new(matches);
 
-    let spinner_style = ProgressStyle::default_spinner()
-        .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
-        .template("{prefix:.bold.dim} {spinner} {wide_msg}");
 
     if conf.prog {
         println!("[{}, {}] {} Initializing DuFF...",
@@ -54,24 +52,24 @@ fn main() {
     // Try creating our files and if we can't tell the user that we don't have the write
     // permissions we need for either the directory they specified or cwd
     let work_file = open_file(&conf.work_file, &conf.work_dir,
-                                        conf.user_set_dir);
+                              conf.user_set_dir);
 
     let hash_file = open_file(&conf.hash_file, &conf.work_dir,
-                                  conf.user_set_dir);
+                              conf.user_set_dir);
 
     let log_file = open_file(&conf.log_file, &conf.work_dir,
-                                  conf.user_set_dir);
+                             conf.user_set_dir);
 
     let temp_file = open_file(&conf.temp_file, &conf.work_dir,
-                                  conf.user_set_dir);
+                              conf.user_set_dir);
 
     let report_file = open_file(&conf.report_file, &conf.work_dir,
-                                  conf.user_set_dir);
+                                conf.user_set_dir);
 
 
     conf.print();
 
-    let mut file_res: Vec<FileResult> = vec![];
+    let file_res: Vec<FileResult> = vec![];
 
     let (tx, rx) = crossbeam_channel::unbounded::<FileResult>();
 
@@ -86,15 +84,33 @@ fn main() {
     walker.threads(conf.jobs as usize);
     let walker = walker.build_parallel();
 
-    if conf.prog {
-        println!("[{}, {}] {} Searching requested directories...",
-                 dt(),
-                 style("02/11").bold().dim(),
-                 LOOKING_GLASS
-        );
-    }
 
-    walker.run(|| {
+    if conf.prog {
+        let spin = ProgressBar::new_spinner();
+        spin.set_draw_target(ProgressDrawTarget::stdout());
+        spin.enable_steady_tick(120);
+        spin.set_style(
+            ProgressStyle::default_spinner()
+                // For more spinners check out the cli-spinners project:
+                // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+                .tick_strings(&[
+                    "▰▱▱▱▱▱▱",
+                    "▰▰▱▱▱▱▱",
+                    "▰▰▰▱▱▱▱",
+                    "▰▰▰▰▱▱▱",
+                    "▰▰▰▰▰▱▱",
+                    "▰▰▰▰▰▰▱",
+                    "▰▰▰▰▰▰▰",
+                ])
+                .template("{prefix} {spinner:.blue}"),
+        );
+        spin.set_prefix(&format!("[{}, {}] {} Searching requested directories...",
+                                 dt(),
+                                 style("02/11").bold().dim(),
+                                 LOOKING_GLASS));
+    }
+    walker.run( || {
+        spin.inc(1);
         let tx = tx.clone();
         let conf = conf.clone();
         Box::new(move |result| {
@@ -102,14 +118,14 @@ fn main() {
             let curr_dir = match result {
                 Ok(t) => t,
                 Err(e) => {
-                    println!("[Extract curr_dir error] {}", e);
+                    eprintln!("[Extract curr_dir error] {}", e);
                     return ignore::WalkState::Continue;
                 }
             };
 
             let curr_path = curr_dir.path();
 
-            // We don't care abou directories!
+            // We don't care about directories!
             if curr_path.is_dir() {
                 return ignore::WalkState::Continue;
             }
@@ -117,7 +133,7 @@ fn main() {
             let path_str = match curr_path.to_str() {
                 Some(t) => t,
                 None => {
-                    println!("Error path-> path_str");
+                    eprintln!("Error path-> path_str");
                     return ignore::WalkState::Continue;
                 }
             };
@@ -127,7 +143,7 @@ fn main() {
             let curr_meta = match curr_dir.metadata() {
                 Ok(t) => t,
                 Err(e) => {
-                    println!("[Meta error] {}", e);
+                    eprintln!("[Meta error] {}", e);
                     return ignore::WalkState::Continue;
                 }
             };
@@ -279,7 +295,7 @@ fn main() {
         );
     }
 
-    dict.retain(|k, v| v.len() > 1);
+    dict.retain(|_, v| v.len() > 1);
 
     if dict.len() == 0 {
         println!("No duplicate files!");

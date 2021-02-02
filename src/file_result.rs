@@ -25,7 +25,7 @@ impl FileResult {
     pub fn calc_hash(&mut self, buff_size: usize) {
 
         // Open the file
-        let mut f = File::open(&self.file_path).unwrap();
+        let f = File::open(&self.file_path).unwrap();
 
         // Create the buff reader
         let mut f = BufReader::with_capacity(buff_size, f);

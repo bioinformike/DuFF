@@ -1,2 +1,12 @@
 /target
-/.idea
+.idea
+*.hash
+*.log
+*.report
+*.temp
+*.working
+*/*.hash
+*/*.log
+*/*.report
+*/*.temp
+*/*.working

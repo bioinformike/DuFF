@@ -24,6 +24,7 @@ rayon = "*"
 byte-unit = "*"
 indicatif = {version = "*", features = ["rayon"]}
 console = "*"
+
 [dev-dependencies]
 assert_cmd = "0.10"
 predicates = "1"

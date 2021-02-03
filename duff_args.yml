@@ -50,6 +50,13 @@ args:
       multiple: false
       takes_value: true
 
+  - prog:
+      help: Hide progress information
+      short: p
+      long: progress
+      multiple: false
+      takes_value: false
+
   - hash:
       help: Path to file containing previously computed hashes
       short: x
@@ -81,9 +88,4 @@ args:
       multiple: false
       takes_value: false
 
-  - prog:
-      help: Show progress
-      short: p
-      long: progress
-      multiple: false
-      takes_value: false
+

@@ -43,7 +43,7 @@ fn main() {
     let conf = Config::new(matches);
 
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Initializing DuFF...",
                  dt(),
                  style("01/11").bold().dim(),
@@ -87,7 +87,7 @@ fn main() {
 
     let mut spin = ProgressBar::new_spinner();
 
-    if conf.prog {
+    if !conf.prog {
         spin.set_draw_target(ProgressDrawTarget::stdout());
         spin.enable_steady_tick(120);
         spin.set_style(
@@ -112,7 +112,7 @@ fn main() {
     }
     walker.run( || {
 
-        if conf.prog {
+        if !conf.prog {
             spin.inc(1);
         }
         let tx = tx.clone();
@@ -178,7 +178,7 @@ fn main() {
 
     let mut dict = HashMap::new();
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Building file size tree...",
                  dt(),
                  style("03/11").bold().dim(),
@@ -194,7 +194,7 @@ fn main() {
 
     drop(rx);
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Identifying duplicate files by size...",
                  dt(),
                  style("04/11").bold().dim(),
@@ -215,7 +215,7 @@ fn main() {
         exit(0)
     }
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Found {} duplicate files by size...",
                  dt(),
                  style("05/11").bold().dim(),
@@ -244,7 +244,7 @@ fn main() {
             });
     }*/
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Calculating hashes for all duplicate files...",
                  dt(),
                  style("06/11").bold().dim(),
@@ -252,7 +252,7 @@ fn main() {
         );
     }
 
-    if conf.prog {
+    if !conf.prog {
         let pb = ProgressBar::with_draw_target(flat.len() as u64,
                                                ProgressDrawTarget::stdout());
 
@@ -284,7 +284,7 @@ fn main() {
 
     drop(tx);
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Building hash tree...",
                  dt(),
                  style("07/11").bold().dim(),
@@ -301,7 +301,7 @@ fn main() {
 
     drop(rx);
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Identifying duplicate files by hash...",
                  dt(),
                  style("08/11").bold().dim(),
@@ -323,7 +323,7 @@ fn main() {
     }
 
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Found {} duplicate files.",
                  dt(),
                  style("09/11").bold().dim(),
@@ -332,7 +332,7 @@ fn main() {
         );
     }
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Wrapping up...",
                  dt(),
                  style("10/11").bold().dim(),
@@ -340,7 +340,7 @@ fn main() {
         );
     }
 
-    if conf.prog {
+    if !conf.prog {
         println!("[{}, {}] {} Writing report...",
                  dt(),
                  style("11/11").bold().dim(),

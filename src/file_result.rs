@@ -3,6 +3,8 @@ use std::fs::File;
 use std::{time, fmt};
 use std::io::{BufReader, BufRead};
 
+use chrono::DateTime;
+
 use std::hash::Hasher;
 use twox_hash::xxh3::{Hash128, HasherExt};
 
@@ -12,12 +14,12 @@ use twox_hash::xxh3::{Hash128, HasherExt};
 pub struct FileResult {
     pub file_path : String,
     pub size : u128,
-    pub mtime: u64,
+    pub mtime: DateTime<Utc>,
     pub hash : String
 }
 
 impl FileResult {
-    pub fn new(file_path: String, size: u128, mtime: u64) -> FileResult {
+    pub fn new(file_path: String, size: u128, mtime: DateTime<Utc>) -> FileResult {
         FileResult {file_path, size, mtime, hash : String::new()}
     }
 

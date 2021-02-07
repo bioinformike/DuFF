@@ -26,6 +26,21 @@ I had originally been implementing all of this in bash, but since I wanted to le
 to use to learn it!
 
 Left to implement:
+- [ ] Need to deal with issues when we traverse into same directory twice.
+  <br /> ```Could definitely filter baged on path in file_res, if a path isn't unique delete all but 1 FileResult 
+         instance for this path.```
+- [ ] Verify DuFF pasts all tests mentioned in this rmlint blog post: https://rmlint.readthedocs.io/en/latest/cautions.html
+- [ ] Need to add output and logging.
+- [ ] Resume functionality
+- [ ] Add low memory mode where instead of building the tree in memory as we recursively search the dir structure in parallel we write our finds out to file. Then use that file for figuring out duplicates, never putting the entire structure in memory.
+Tests to write:
+- [ ] Add tests for extension filtering 
+- [ ] Add tests for size filtering
+- [ ] Test Windows compatibility
+- [ ] Verify we handle all I/O errors appropriately
+
+
+Completed
 - [x] Include GH issues in program help.
 - [x] Program is not ending after walking dir structure - likely has to do with error matching logic in run fn.
 - [x] Running program on / where we will get permission denied (good) we are not getting all directories we should.
@@ -47,7 +62,7 @@ Left to implement:
   ```
   # Currently not coded to wrap the output, so not sure how that will act in a real terminal.
    ```
-- [ ] Switch all errors to print to stderr
+- [x] Switch all errors to print to stderr
 - [x] Add extension limiting functionality --ext
 - [x] Add size limiting functionality --size
 - [x] Replace size limiting with --ul --ll for upper limit and lower limit and support both at the same time.
@@ -66,17 +81,9 @@ Left to implement:
 - [x] Refactor code (Move most code out of main.rs)
 - [x] Deal with cargo warnings
   <br /> ```Still some warnings left but all for unused variables that I will in future code.```
-- [ ] Need to deal with issues when we traverse into same directory twice.
-  <br /> ```Could definitely filter baged on path in file_res, if a path isn't unique delete all but 1 FileResult 
-         instance for this path.```
-- [ ] Verify DuFF pasts all tests mentioned in this rmlint blog post: https://rmlint.readthedocs.io/en/latest/cautions.html
-- [ ] Need to add output and logging.
+
 - [x] Progress bar functionality
   <br /> ```Implemented, -p flag required to show progress ```
-- [ ] Resume functionality
 
-Testing to do:
-- [ ] Add tests for extension filtering 
-- [ ] Add tests for size filtering
-- [ ] Test Windows compatibility
-- [ ] Verify we handle all I/O errors appropriately
+
+

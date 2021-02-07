@@ -3,7 +3,7 @@ use std::fs::File;
 use std::{time, fmt};
 use std::io::{BufReader, BufRead};
 
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 
 use std::hash::Hasher;
 use twox_hash::xxh3::{Hash128, HasherExt};

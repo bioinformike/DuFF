@@ -2,9 +2,11 @@ mod util;
 mod config;
 mod file_result;
 
-use crate::util::*;
-use crate::config::*;
-use crate::file_result::*;
+//use crate::util;
+//use crate::config;
+//use crate::file_result::*;
+
+
 
 use std::{path::Path, fs::File, io};
 use clap::{load_yaml, App};
@@ -22,6 +24,8 @@ use indicatif::{ParallelProgressIterator, ProgressStyle, ProgressBar, ProgressDr
 
 use console::{Emoji, style};
 use std::io::Write;
+use crate::util::open_file;
+use chrono::Utc;
 
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
 static ROCKET: Emoji = Emoji("🚀", "");
@@ -40,12 +44,12 @@ fn main() {
     let matches = App::from(yams).get_matches();
 
     // Process user input
-    let conf = Config::new(matches);
+    let conf = config::Config::new(matches);
 
 
     if !conf.prog {
         println!("[{}, {}] {} Initializing DuFF...",
-                 dt(),
+                 util::dt(),
                  style("01/11").bold().dim(),
                  ROCKET
         );
@@ -70,9 +74,9 @@ fn main() {
 
     conf.print();
 
-    let file_res: Vec<FileResult> = vec![];
+    let file_res: Vec<file_result::FileResult> = vec![];
 
-    let (tx, rx) = crossbeam_channel::unbounded::<FileResult>();
+    let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
 
     let mut dirs = conf.search_path.clone();
     let curr_dir = dirs.pop().unwrap();
@@ -106,7 +110,7 @@ fn main() {
                 .template("{prefix} {spinner:.blue}"),
         );
         spin.set_prefix(&format!("[{}, {}] {} Searching requested directories...",
-                                 dt(),
+                                 util::dt(),
                                  style("02/11").bold().dim(),
                                  LOOKING_GLASS));
     }
@@ -152,22 +156,17 @@ fn main() {
                 }
             };
 
-            let m = curr_meta.modified().unwrap();
-            let mut mtime;
-
-            match m.duration_since(SystemTime::UNIX_EPOCH) {
-                Ok(n) => mtime =  n.as_secs(),
-                Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-            }
+            let mtime = curr_meta.modified().unwrap();
+            let mtime: chrono::DateTime<Utc> = mtime.into();
 
             let fs = u128::from(curr_meta.len());
 
             // only want to send something down the channel if its a file and meets our extension
             // and size requirements.
-            let ext_match = is_good_ext(curr_path, &conf.exts);
-            let size_match = is_good_size(fs, conf.ll_size, conf.ul_size);
+            let ext_match = util::is_good_ext(curr_path, &conf.exts);
+            let size_match = util::is_good_size(fs, conf.ll_size, conf.ul_size);
             if ext_match && size_match  {
-                tx.send(FileResult::new(path_str, fs, mtime)).unwrap();
+                tx.send(file_result::FileResult::new(path_str, fs, mtime)).unwrap();
             }
 
             Continue
@@ -180,7 +179,7 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Building file size tree...",
-                 dt(),
+                 util::dt(),
                  style("03/11").bold().dim(),
                  TREE
         );
@@ -196,7 +195,7 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Identifying duplicate files by size...",
-                 dt(),
+                 util::dt(),
                  style("04/11").bold().dim(),
                  SCALES
         );
@@ -217,14 +216,14 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Found {} duplicate files by size...",
-                 dt(),
+                 util::dt(),
                  style("05/11").bold().dim(),
                  MONOCLE,
                  ndupes
         );
     }
 
-    let (tx, rx) = crossbeam_channel::unbounded::<FileResult>();
+    let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
 
     let flat: Vec<_> = dict.values().collect();
     let mut flat: Vec<_> = flat.into_iter().flatten().cloned().collect::<Vec<_>>();
@@ -246,7 +245,7 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Calculating hashes for all duplicate files...",
-                 dt(),
+                 util::dt(),
                  style("06/11").bold().dim(),
                  ROBOT,
         );
@@ -286,7 +285,7 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Building hash tree...",
-                 dt(),
+                 util::dt(),
                  style("07/11").bold().dim(),
                  TREE
         );
@@ -303,7 +302,7 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Identifying duplicate files by hash...",
-                 dt(),
+                 util::dt(),
                  style("08/11").bold().dim(),
                  SCALES
         );
@@ -325,7 +324,7 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Found {} duplicate files.",
-                 dt(),
+                 util::dt(),
                  style("09/11").bold().dim(),
                  MONOCLE,
                  ndupes
@@ -334,7 +333,7 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Wrapping up...",
-                 dt(),
+                 util::dt(),
                  style("10/11").bold().dim(),
                  CLAPPER,
         );
@@ -342,7 +341,7 @@ fn main() {
 
     if !conf.prog {
         println!("[{}, {}] {} Writing report...",
-                 dt(),
+                 util::dt(),
                  style("11/11").bold().dim(),
                  REPORT,
         );

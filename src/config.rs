@@ -1,4 +1,4 @@
-use crate::util::*;
+use crate::util;
 
 use std::{process, env, fs};
 use pretty_bytes::converter;
@@ -178,7 +178,7 @@ impl Config  {
                 Err(e) => {
                     let err_str = format!("Could not use current working directory, please specify where {} can \
                               store temporary files and the final report using the -f (--file) \
-                              argument. \nError text: {}", PROG_NAME.to_owned() + PROG_VERS, e);
+                              argument. \nError text: {}", util::PROG_NAME.to_owned() + util::PROG_VERS, e);
                     eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
 
                     std::process::exit(1);
@@ -189,12 +189,12 @@ impl Config  {
 
 
         // Specify the paths for our working files, we'll create them later.
-        let work_file = format!("{}/DuFF_{}.working", work_dir, f_dt());
-        let hash_file = format!("{}/DuFF_{}.hash", work_dir, f_dt());
-        let log_file = format!("{}/DuFF_{}.log", work_dir, f_dt());
-        let temp_file = format!("{}/DuFF_{}.temp", work_dir, f_dt());
+        let work_file = format!("{}/DuFF_{}.working", work_dir, util::f_dt());
+        let hash_file = format!("{}/DuFF_{}.hash", work_dir, util::f_dt());
+        let log_file = format!("{}/DuFF_{}.log", work_dir, util::f_dt());
+        let temp_file = format!("{}/DuFF_{}.temp", work_dir, util::f_dt());
 
-        let report_file_str = format!("{}/DuFF_{}.report", work_dir, f_dt());
+        let report_file_str = format!("{}/DuFF_{}.report", work_dir, util::f_dt());
         let report_file = report_file_str.clone();
 
         Config {
@@ -230,7 +230,7 @@ impl Config  {
 
         let border_str = "=".repeat(textwrap::termwidth());
         println!("{}", border_str);
-        println!("{:<21} {:^39} {:>0}", dt(), "Overview", PROG_NAME.to_owned() + " v" + PROG_VERS);
+        println!("{:<21} {:^39} {:>0}", util::dt(), "Overview", util::PROG_NAME.to_owned() + " v" + util::PROG_VERS);
         println!("{}", border_str);
         println!("{:<40} {:>1}", "Status:", "New Run" );
         println!("{:<40} {:>1}", "Search Directories:", self.search_path.join(","));
@@ -254,7 +254,7 @@ impl Config  {
         println!("{:<40} {:>1}", "Save Hashes:", self.archive);
         println!("{:<40} {:>1}", "Debug Mode:", self.debug);
         println!("{:<40} {:>1}", "Show Progress:", self.prog);
-        println!("{:<40} {:>1}", "Report any issues at:", PROG_ISSUES);
+        println!("{:<40} {:>1}", "Report any issues at:", util::PROG_ISSUES);
 
 
 

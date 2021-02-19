@@ -91,3 +91,36 @@ pub fn is_good_size(curr_fs: u128, min_size: u128, max_size: u128) -> bool {
 
 }
 
+/*
+pub fn scan_fs() {
+    crossbeam::scope(|spawner| {
+        let handles: Vec<ScopedJoinHandle<Vec<String>>> = (0..conf.jobs)
+            .map(|_| {
+                spawner.spawn(move |_| {
+                    let mut local_q: Worker<Job> = Worker::new_fifo();
+
+                    loop {
+                        match find_task(&mut local_q, &global_q) {
+                            Some(mut job) => {
+
+                                // This should really only be the case, but we'll handle
+                                // if its a file too.
+                                if job.is_dir() {
+                                    println!("Dir: {}", job.to_str().unwrap());
+                                } else if job.is_file() {
+                                    println!("File: {}", job.to_str().unwrap());
+                                }
+                            }
+                            None => break,
+                        }
+                    }
+                })
+            })
+            .collect();
+    }
+}
+*/
+// Reads contents of directory and pushes result down channel
+pub fn read_dir(dir: &Path)  {
+
+}

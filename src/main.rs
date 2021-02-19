@@ -5,13 +5,13 @@ mod file_result;
 //use crate::util;
 //use crate::config;
 //use crate::file_result::*;
+use crossbeam_deque::{Injector, Stealer, Worker, Steal};
 
 
-
-use std::{path::Path, fs::File, io};
+use std::{path::Path, fs::File, io, iter};
 use clap::{load_yaml, App};
 
-use crossbeam::crossbeam_channel;
+use crossbeam::{crossbeam_channel, thread};
 use walkdir;
 use ignore;
 use std::cmp::Ordering;
@@ -26,6 +26,8 @@ use console::{Emoji, style};
 use std::io::Write;
 use crate::util::open_file;
 use chrono::Utc;
+use std::path::PathBuf;
+
 
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
 static ROCKET: Emoji = Emoji("🚀", "");
@@ -54,22 +56,6 @@ fn main() {
                  ROCKET
         );
     }
-    // Try creating our files and if we can't tell the user that we don't have the write
-    // permissions we need for either the directory they specified or cwd
-    let work_file = open_file(&conf.work_file, &conf.work_dir,
-                              conf.user_set_dir);
-
-    let hash_file = open_file(&conf.hash_file, &conf.work_dir,
-                              conf.user_set_dir);
-
-    let log_file = open_file(&conf.log_file, &conf.work_dir,
-                             conf.user_set_dir);
-
-    let temp_file = open_file(&conf.temp_file, &conf.work_dir,
-                              conf.user_set_dir);
-
-    let mut report_file = open_file(&conf.report_file, &conf.work_dir,
-                                    conf.user_set_dir);
 
 
     conf.print();
@@ -79,101 +65,216 @@ fn main() {
     let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
 
     let mut dirs = conf.search_path.clone();
-    let curr_dir = dirs.pop().unwrap();
+    //let curr_dir = dirs.pop().unwrap();
 
-    let mut walker = ignore::WalkBuilder::new(Path::new(curr_dir.as_str()));
 
-    for x in dirs.iter() {
-        walker.add(Path::new(x.as_str()));
-    }
-    walker.threads(conf.jobs as usize);
-    let walker = walker.build_parallel();
+    // If its a directory read the contents and process
+    // Process:
+    //    if file: create FileResult object and shove down channel
+    //    if directory: throw on global queue
 
-    let mut spin = ProgressBar::new_spinner();
+    // Nifty trick picked up from:
+    // https://github.com/elfsternberg/boggle-solver/blob/4dbb9b9e07da493c74fe9299fa8fb7d5b5589151/docs/20190816_Solving_Boggle_Multithreaded.md
+    let global_q = &{
+        let global_q = Injector::new();
 
-    if !conf.prog {
-        spin.set_draw_target(ProgressDrawTarget::stdout());
-        spin.enable_steady_tick(120);
-        spin.set_style(
-            ProgressStyle::default_spinner()
-                // For more spinners check out the cli-spinners project:
-                // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
-                .tick_strings(&[
-                    "▰▱▱▱▱▱▱",
-                    "▰▰▱▱▱▱▱",
-                    "▰▰▰▱▱▱▱",
-                    "▰▰▰▰▱▱▱",
-                    "▰▰▰▰▰▱▱",
-                    "▰▰▰▰▰▰▱",
-                    "▰▰▰▰▰▰▰",
-                ])
-                .template("{prefix} {spinner:.blue}"),
-        );
-        spin.set_prefix(&format!("[{}, {}] {} Searching requested directories...",
-                                 util::dt(),
-                                 style("02/11").bold().dim(),
-                                 LOOKING_GLASS));
-    }
-    walker.run( || {
+        for x in dirs.iter() {
+            global_q.push(PathBuf::from(x))
+        }
+
+        global_q
+    };
+
+
+    //let mut dict = HashMap::new();
+
+    thread::scope(|scope| {
+        for j in 0..conf.jobs {
+            scope.spawn(move |_| {
+                //let tx = tx.clone();
+                let conf = conf.clone();
+
+                let mut local_q: Worker<PathBuf> = Worker::new_fifo();
+
+                loop {
+                    match find_task(&mut local_q, &global_q) {
+                        Some(mut job) => {
+
+                            // This should really only be the case, but we'll handle
+                            // if its a file too.
+                            if job.is_dir() {
+                                //global_q.push(job);
+
+                                // Read contents of dir
+                                let dir_ls = match job.read_dir() {
+                                    Ok(t) => t,
+                                    Err(e) => {
+                                        eprintln!("[Readdir error] {}", e);
+                                        continue
+                                    }
+                                };
+
+                                for entry in dir_ls {
+                                    match entry {
+                                        Ok(curr_ent) => {
+
+                                            let curr_pb = curr_ent.path();
+                                            let curr_path = curr_pb.as_path();
+
+                                            // If entry is dir push it into global q
+                                            if curr_path.is_dir() {
+                                                global_q.push(curr_pb);
+                                            } else if curr_path.is_file() {
+
+                                                let path_str = match curr_path.to_str() {
+                                                    Some(u) => u,
+                                                    None => {
+                                                        eprintln!("Error path-> path_str");
+                                                        continue
+                                                    }
+                                                };
+
+                                                let path_str = String::from(path_str);
+
+                                                let curr_meta = match curr_path.metadata() {
+                                                    Ok(u) => u,
+                                                    Err(e) => {
+                                                        eprintln!("[Meta error] {}", e);
+                                                        continue
+                                                    }
+                                                };
+
+                                                let mtime = match curr_meta.modified() {
+                                                    Ok(u) => u,
+                                                    Err(e) => {
+                                                        eprintln!("[mtime error] {}", e);
+                                                        continue
+                                                    }
+                                                };
+                                                let mtime: chrono::DateTime<Utc> = mtime.into();
+
+                                                let fs = u128::from(curr_meta.len());
+
+                                                let ext_match = util::is_good_ext(curr_path, &conf.exts);
+                                                let size_match = util::is_good_size(fs, conf.ll_size, conf.ul_size);
+                                                //if ext_match && size_match  {
+                                                //    tx.send(file_result::FileResult::new(path_str, fs, mtime)).unwrap();
+                                                //}
+                                            }
+                                        },
+                                        Err(e) => {
+                                            continue
+                                        }
+                                    }
+                                }
+
+                                println!("Dir: {}", job.to_str().unwrap());
+                            } else if job.is_file() {
+                                println!("File: {}", job.to_str().unwrap());
+                            }
+                        }
+                        None => break,
+                    }
+                }
+            });
+        }
+    }).unwrap();
+
+}
+
+    /*    let mut walker = ignore::WalkBuilder::new(Path::new(curr_dir.as_str()));
+
+        for x in dirs.iter() {
+            walker.add(Path::new(x.as_str()));
+        }
+        walker.threads(conf.jobs as usize);
+        let walker = walker.build_parallel();
+
+        let mut spin = ProgressBar::new_spinner();
 
         if !conf.prog {
-            spin.inc(1);
+            spin.set_draw_target(ProgressDrawTarget::stdout());
+            spin.enable_steady_tick(120);
+            spin.set_style(
+                ProgressStyle::default_spinner()
+                    // For more spinners check out the cli-spinners project:
+                    // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+                    .tick_strings(&[
+                        "▰▱▱▱▱▱▱",
+                        "▰▰▱▱▱▱▱",
+                        "▰▰▰▱▱▱▱",
+                        "▰▰▰▰▱▱▱",
+                        "▰▰▰▰▰▱▱",
+                        "▰▰▰▰▰▰▱",
+                        "▰▰▰▰▰▰▰",
+                    ])
+                    .template("{prefix} {spinner:.blue}"),
+            );
+            spin.set_prefix(&format!("[{}, {}] {} Searching requested directories...",
+                                     util::dt(),
+                                     style("02/11").bold().dim(),
+                                     LOOKING_GLASS));
         }
-        let tx = tx.clone();
-        let conf = conf.clone();
-        Box::new(move |result| {
-            use ignore::WalkState::*;
-            let curr_dir = match result {
-                Ok(t) => t,
-                Err(e) => {
-                    eprintln!("[Extract curr_dir error] {}", e);
-                    return ignore::WalkState::Continue;
-                }
-            };
+        walker.run( || {
 
-            let curr_path = curr_dir.path();
-
-            // We don't care about directories!
-            if curr_path.is_dir() {
-                return ignore::WalkState::Continue;
+            if !conf.prog {
+                spin.inc(1);
             }
+            let tx = tx.clone();
+            let conf = conf.clone();
+            Box::new(move |result| {
+                use ignore::WalkState::*;
+                let curr_dir = match result {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("[Extract curr_dir error] {}", e);
+                        return ignore::WalkState::Continue;
+                    }
+                };
 
-            let path_str = match curr_path.to_str() {
-                Some(t) => t,
-                None => {
-                    eprintln!("Error path-> path_str");
+                let curr_path = curr_dir.path();
+
+                // We don't care about directories!
+                if curr_path.is_dir() {
                     return ignore::WalkState::Continue;
                 }
-            };
 
-            let path_str = String::from(path_str);
+                let path_str = match curr_path.to_str() {
+                    Some(t) => t,
+                    None => {
+                        eprintln!("Error path-> path_str");
+                        return ignore::WalkState::Continue;
+                    }
+                };
 
-            let curr_meta = match curr_dir.metadata() {
-                Ok(t) => t,
-                Err(e) => {
-                    eprintln!("[Meta error] {}", e);
-                    return ignore::WalkState::Continue;
+                let path_str = String::from(path_str);
+
+                let curr_meta = match curr_dir.metadata() {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("[Meta error] {}", e);
+                        return ignore::WalkState::Continue;
+                    }
+                };
+
+                let mtime = curr_meta.modified().unwrap();
+                let mtime: chrono::DateTime<Utc> = mtime.into();
+
+                let fs = u128::from(curr_meta.len());
+
+                // only want to send something down the channel if its a file and meets our extension
+                // and size requirements.
+                let ext_match = util::is_good_ext(curr_path, &conf.exts);
+                let size_match = util::is_good_size(fs, conf.ll_size, conf.ul_size);
+                if ext_match && size_match  {
+                    tx.send(file_result::FileResult::new(path_str, fs, mtime)).unwrap();
                 }
-            };
 
-            let mtime = curr_meta.modified().unwrap();
-            let mtime: chrono::DateTime<Utc> = mtime.into();
+                Continue
+            })
+        });*/
 
-            let fs = u128::from(curr_meta.len());
-
-            // only want to send something down the channel if its a file and meets our extension
-            // and size requirements.
-            let ext_match = util::is_good_ext(curr_path, &conf.exts);
-            let size_match = util::is_good_size(fs, conf.ll_size, conf.ul_size);
-            if ext_match && size_match  {
-                tx.send(file_result::FileResult::new(path_str, fs, mtime)).unwrap();
-            }
-
-            Continue
-        })
-    });
-
-    drop(tx);
+/*    drop(tx);
 
     let mut dict = HashMap::new();
 
@@ -352,11 +453,21 @@ fn main() {
             for y in v.iter() {
                 writeln!(report_file, "{}", y);
             }
-        }
+        }*/
+
+
+
+
+
+fn find_task<T>(local: &mut Worker<T>, global: &Injector<T>) -> Option<T> {
+    match local.pop() {
+        Some(job) => Some(job),
+        None => loop {
+            match global.steal() {
+                Steal::Success(job) => break Some(job),
+                Steal::Empty => break None,
+                Steal::Retry => {}
+            }
+        },
     }
-
-
 }
-
-
-

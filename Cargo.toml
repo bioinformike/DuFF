@@ -13,6 +13,7 @@ clap = { version = "2", features = ["yaml", "wrap_help"] }
 
 walkdir = "2"
 crossbeam  = "*"
+crossbeam-deque = "*"
 ignore = "*"
 ring = "*"
 chrono = "*"

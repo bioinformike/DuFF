@@ -28,6 +28,8 @@ use crate::util::open_file;
 use chrono::Utc;
 use std::path::PathBuf;
 
+use flurry;
+
 
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
 static ROCKET: Emoji = Emoji("🚀", "");
@@ -58,6 +60,10 @@ fn main() {
     }
 
 
+
+    let mut report_file = open_file(&conf.report_file, &conf.work_dir,
+                                    conf.user_set_dir);
+
     conf.print();
 
     let file_res: Vec<file_result::FileResult> = vec![];
@@ -85,15 +91,13 @@ fn main() {
         global_q
     };
 
-
-    //let mut dict = HashMap::new();
+    println!("{}", global_q.len());
 
     thread::scope(|scope| {
         for j in 0..conf.jobs {
+            let conf = conf.clone();
+            let tx = tx.clone();
             scope.spawn(move |_| {
-                //let tx = tx.clone();
-                let conf = conf.clone();
-
                 let mut local_q: Worker<PathBuf> = Worker::new_fifo();
 
                 loop {
@@ -117,7 +121,6 @@ fn main() {
                                 for entry in dir_ls {
                                     match entry {
                                         Ok(curr_ent) => {
-
                                             let curr_pb = curr_ent.path();
                                             let curr_path = curr_pb.as_path();
 
@@ -125,7 +128,6 @@ fn main() {
                                             if curr_path.is_dir() {
                                                 global_q.push(curr_pb);
                                             } else if curr_path.is_file() {
-
                                                 let path_str = match curr_path.to_str() {
                                                     Some(u) => u,
                                                     None => {
@@ -157,9 +159,15 @@ fn main() {
 
                                                 let ext_match = util::is_good_ext(curr_path, &conf.exts);
                                                 let size_match = util::is_good_size(fs, conf.ll_size, conf.ul_size);
-                                                //if ext_match && size_match  {
-                                                //    tx.send(file_result::FileResult::new(path_str, fs, mtime)).unwrap();
-                                                //}
+
+                                                // Thanks to this SO answer: https://stackoverflow.com/a/33243862
+                                                //dict.entry(fs).or_insert(Vec::new())
+                                                //.push(file_result::FileResult::new(
+                                                //    path_str, fs, mtime));
+
+                                                if ext_match && size_match {
+                                                    tx.send(file_result::FileResult::new(path_str, fs, mtime)).unwrap();
+                                                }
                                             }
                                         },
                                         Err(e) => {
@@ -180,8 +188,141 @@ fn main() {
         }
     }).unwrap();
 
-}
 
+    drop(tx);
+
+    let mut dict = HashMap::new();
+
+
+    // Dump the channel contents out into a vec
+    for t in rx.iter() {
+        // Thanks to this SO answer: https://stackoverflow.com/a/33243862
+        dict.entry(t.size).or_insert(Vec::new()).push(t);
+    }
+
+    drop(rx);
+
+    // Only keep dict elements where vector has at least 2 elements (dupes)
+    dict.retain(|&k, v| v.len() > 1);
+
+    let mut ndupes = 0;
+
+    for (_, v) in dict.iter() {
+        ndupes += v.len();
+    }
+
+    if ndupes == 0 {
+        println!("No duplicate files!");
+        exit(0)
+    }
+
+    if !conf.prog {
+        println!("[{}, {}] {} Found {} duplicate files by size...",
+                 util::dt(),
+                 style("05/11").bold().dim(),
+                 MONOCLE,
+                 ndupes
+        );
+    }
+
+    // Create new channels
+    let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
+
+    // Flatten the dict out for further processing.
+    let flat: Vec<_> = dict.values().collect();
+    let mut flat: Vec<_> = flat.into_iter().flatten().cloned().collect::<Vec<_>>();
+
+    // 1 KiB  8 KiB 128KiB 256KiB  512KiB  1MiB, 8MiB, 16MiB, 32MiB]
+    let mut sizes = [1024, 8192, 131072, 262144, 524288, 1048576, 8388608,
+        16777216, 33554432];
+    for z in 0..sizes.len() {
+        flat.par_iter_mut().for_each(|x| {
+            let start = Instant::now();
+            x.calc_hash(sizes[z]);
+            tx.send(x.to_owned()).unwrap();
+
+            let duration = start.elapsed();
+            println!("{:?}, {:?}, {}, {},  {}", duration, sizes[z], &x.hash, &x.size, &x.file_path);
+        });
+    }
+
+    // Slide modification of what we did above after the directory walking
+    let mut dict = HashMap::new();
+
+    drop(tx);
+
+    if !conf.prog {
+        println!("[{}, {}] {} Building hash tree...",
+                 util::dt(),
+                 style("07/11").bold().dim(),
+                 TREE
+        );
+    }
+
+    // Dump the channel contents out into a vec
+    for t in rx.iter() {
+        let key = format!("{}_{}", t.size, t.hash);
+
+        dict.entry(key).or_insert(Vec::new()).push(t);
+    }
+
+    drop(rx);
+
+    if !conf.prog {
+        println!("[{}, {}] {} Identifying duplicate files by hash...",
+                 util::dt(),
+                 style("08/11").bold().dim(),
+                 SCALES
+        );
+    }
+
+    dict.retain(|_, v| v.len() > 1);
+
+    let mut ndupes = 0;
+
+    for (_, v) in dict.iter() {
+        ndupes += v.len();
+    }
+
+    if ndupes == 0 {
+        println!("No duplicate files!");
+        exit(0)
+    }
+
+
+    if !conf.prog {
+        println!("[{}, {}] {} Found {} duplicate files.",
+                 util::dt(),
+                 style("09/11").bold().dim(),
+                 MONOCLE,
+                 ndupes
+        );
+    }
+
+    if !conf.prog {
+        println!("[{}, {}] {} Wrapping up...",
+                 util::dt(),
+                 style("10/11").bold().dim(),
+                 CLAPPER,
+        );
+    }
+
+    if !conf.prog {
+        println!("[{}, {}] {} Writing report...",
+                 util::dt(),
+                 style("11/11").bold().dim(),
+                 REPORT,
+        );
+
+        // write the header line
+        writeln!(report_file, "size hash mtime path");
+        for (k, v) in dict.iter() {
+            for y in v.iter() {
+                writeln!(report_file, "{}", y);
+            }
+        }
+    }
+}
     /*    let mut walker = ignore::WalkBuilder::new(Path::new(curr_dir.as_str()));
 
         for x in dirs.iter() {
@@ -215,84 +356,6 @@ fn main() {
                                      style("02/11").bold().dim(),
                                      LOOKING_GLASS));
         }
-        walker.run( || {
-
-            if !conf.prog {
-                spin.inc(1);
-            }
-            let tx = tx.clone();
-            let conf = conf.clone();
-            Box::new(move |result| {
-                use ignore::WalkState::*;
-                let curr_dir = match result {
-                    Ok(t) => t,
-                    Err(e) => {
-                        eprintln!("[Extract curr_dir error] {}", e);
-                        return ignore::WalkState::Continue;
-                    }
-                };
-
-                let curr_path = curr_dir.path();
-
-                // We don't care about directories!
-                if curr_path.is_dir() {
-                    return ignore::WalkState::Continue;
-                }
-
-                let path_str = match curr_path.to_str() {
-                    Some(t) => t,
-                    None => {
-                        eprintln!("Error path-> path_str");
-                        return ignore::WalkState::Continue;
-                    }
-                };
-
-                let path_str = String::from(path_str);
-
-                let curr_meta = match curr_dir.metadata() {
-                    Ok(t) => t,
-                    Err(e) => {
-                        eprintln!("[Meta error] {}", e);
-                        return ignore::WalkState::Continue;
-                    }
-                };
-
-                let mtime = curr_meta.modified().unwrap();
-                let mtime: chrono::DateTime<Utc> = mtime.into();
-
-                let fs = u128::from(curr_meta.len());
-
-                // only want to send something down the channel if its a file and meets our extension
-                // and size requirements.
-                let ext_match = util::is_good_ext(curr_path, &conf.exts);
-                let size_match = util::is_good_size(fs, conf.ll_size, conf.ul_size);
-                if ext_match && size_match  {
-                    tx.send(file_result::FileResult::new(path_str, fs, mtime)).unwrap();
-                }
-
-                Continue
-            })
-        });*/
-
-/*    drop(tx);
-
-    let mut dict = HashMap::new();
-
-    if !conf.prog {
-        println!("[{}, {}] {} Building file size tree...",
-                 util::dt(),
-                 style("03/11").bold().dim(),
-                 TREE
-        );
-    }
-
-    // Dump the channel contents out into a vec
-    for t in rx.iter() {
-        // Thanks to this SO answer: https://stackoverflow.com/a/33243862
-        dict.entry(t.size).or_insert(Vec::new()).push(t);
-    }
-
-    drop(rx);
 
     if !conf.prog {
         println!("[{}, {}] {} Identifying duplicate files by size...",

@@ -10,6 +10,7 @@ dependencies = [
  "clap",
  "console",
  "crossbeam",
+ "crossbeam-deque 0.8.0",
  "ignore",
  "indicatif",
  "itertools",

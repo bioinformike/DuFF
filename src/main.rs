@@ -28,7 +28,6 @@ use crate::util::open_file;
 use chrono::Utc;
 use std::path::PathBuf;
 
-use flurry;
 
 
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");

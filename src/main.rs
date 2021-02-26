@@ -249,7 +249,7 @@ fn main() {
 
             let duration = start.elapsed().as_micros();
             println!("{:?},{:?},{},{},{}",
-                     duration, sizes[z], &x.hash, &x.size, &x.file_path);
+                     duration, sizes[z], &x.hash.to_string(), &x.size, &x.file_path);
             writeln!(&log_file, "{:?},{:?},{},{},{}",
                      duration, sizes[z], &x.hash, &x.size, &x.file_path);
         });

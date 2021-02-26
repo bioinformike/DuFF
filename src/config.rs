@@ -1,6 +1,6 @@
 use crate::util;
 
-use std::{process, env, fs};
+use std::{process, env, fs, fmt};
 use pretty_bytes::converter;
 use byte_unit::{Byte, ByteUnit};
 use clap::ArgMatches;
@@ -258,5 +258,39 @@ impl Config  {
 
 
 
+    }
+}
+
+impl fmt::Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let border_str = "=".repeat(textwrap::termwidth());
+        writeln!(f, "{}", border_str);
+        writeln!(f, "{:<21} {:^39} {:>0}", util::dt(), "Overview", util::PROG_NAME.to_owned() + " v" + util::PROG_VERS);
+        writeln!(f, "{}", border_str);
+        writeln!(f, "{:<40} {:>1}", "Status:", "New Run" );
+        writeln!(f, "{:<40} {:>1}", "Search Directories:", self.search_path.join(","));
+        writeln!(f, "{:<40} {:>1}", "Extensions:", self.exts.join(", "));
+
+        // If they set a lower lim
+        if self.ll_size > 0 {
+            let ll_str = converter::convert(self.ll_size as f64);
+            writeln!(f, "{:<40} {:>1}", "Minimum Size:", ll_str );
+
+        }
+        // If they set a upper lim
+        if self.ul_size < 340282366920938463463374607431768211455 {
+            let ul_str = converter::convert(self.ul_size as f64);
+            writeln!(f, "{:<40} {:>1}", "Maximum Size:", ul_str);
+        }
+
+        writeln!(f, "{:<40} {:>1}", "Number of Threads:", self.jobs);
+        writeln!(f, "{:<40} {:>1}", "Working Directory:", self.work_dir);
+        writeln!(f, "{:<40} {:>1}", "Final Report:", self.report_file);
+        writeln!(f, "{:<40} {:>1}", "Save Hashes:", self.archive);
+        writeln!(f, "{:<40} {:>1}", "Debug Mode:", self.debug);
+        writeln!(f, "{:<40} {:>1}", "Show Progress:", self.prog);
+        writeln!(f, "{:<40} {:>1}", "Report any issues at:", util::PROG_ISSUES);
+
+        Ok(())
     }
 }

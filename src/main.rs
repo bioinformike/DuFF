@@ -63,7 +63,12 @@ fn main() {
     let mut report_file = open_file(&conf.report_file, &conf.work_dir,
                                     conf.user_set_dir);
 
+
+    let mut log_file = open_file(&conf.log_file, &conf.work_dir,
+                                    conf.user_set_dir);
+
     conf.print();
+    writeln!(log_file, "{}", conf);
 
     let file_res: Vec<file_result::FileResult> = vec![];
 
@@ -234,14 +239,19 @@ fn main() {
     // 1 KiB  8 KiB 128KiB 256KiB  512KiB  1MiB, 8MiB, 16MiB, 32MiB]
     let mut sizes = [1024, 8192, 131072, 262144, 524288, 1048576, 8388608,
         16777216, 33554432];
+    // Print header for log_file
+    writeln!(log_file, "Duration [microsec],Buffer size [B],File hash,File size [B],File");
     for z in 0..sizes.len() {
         flat.par_iter_mut().for_each(|x| {
             let start = Instant::now();
             x.calc_hash(sizes[z]);
             tx.send(x.to_owned()).unwrap();
 
-            let duration = start.elapsed();
-            println!("{:?}, {:?}, {}, {},  {}", duration, sizes[z], &x.hash, &x.size, &x.file_path);
+            let duration = start.elapsed().as_micros();
+            println!("{:?},{:?},{},{},{}",
+                     duration, sizes[z], &x.hash, &x.size, &x.file_path);
+            writeln!(&log_file, "{:?},{:?},{},{},{}",
+                     duration, sizes[z], &x.hash, &x.size, &x.file_path);
         });
     }
 

@@ -3,7 +3,7 @@ use predicates::prelude::*;
 use std::process::Command;
 
 
-// Size tests
+// Search dir tests
 #[test]
 fn search_dir_dne() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("DuFF")?;

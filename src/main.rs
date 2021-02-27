@@ -27,7 +27,7 @@ use std::io::Write;
 use crate::util::open_file;
 use chrono::Utc;
 use std::path::PathBuf;
-
+use std::convert::TryFrom;
 
 
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
@@ -72,7 +72,8 @@ fn main() {
 
     let file_res: Vec<file_result::FileResult> = vec![];
 
-    let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
+    let (cnt_tx, cnt_rx) = crossbeam_channel::unbounded::<u64>();
+    let (tx, rx) = crossbeam_channel::unbounded::<PathBuf>();
 
     let mut dirs = conf.search_path.clone();
     //let curr_dir = dirs.pop().unwrap();
@@ -95,8 +96,8 @@ fn main() {
         global_q
     };
 
-    println!("{}", global_q.len());
 
+    // Directory mapping
     thread::scope(|scope| {
         for j in 0..conf.jobs {
             let conf = conf.clone();
@@ -107,6 +108,82 @@ fn main() {
                 loop {
                     match find_task(&mut local_q, &global_q) {
                         Some(mut job) => {
+
+                            // This should really only be the case, but we'll handle
+                            // if its a file too.
+                            if job.is_dir() {
+
+                                // Read contents of dir
+                                let dir_ls = match job.read_dir() {
+                                    Ok(t) => t,
+                                    Err(e) => {
+                                        eprintln!("[Readdir error] {}", e);
+                                        continue
+                                    }
+                                };
+
+                                for entry in dir_ls {
+                                    match entry {
+                                        Ok(curr_ent) => {
+                                            let curr_pb = curr_ent.path();
+                                            let curr_path = curr_pb.as_path();
+
+                                            // If entry is dir push it into global q
+                                            if curr_path.is_dir() {
+                                                global_q.push(curr_pb);
+                                                cnt_tx.send(1);
+                                            } else {
+                                                tx.send(curr_pb);
+                                            }
+                                        },
+                                        Err(e) => {
+                                            continue
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        None => break,
+                    }
+                }
+            });
+        }
+    }).unwrap();
+
+    drop(tx);
+
+
+    let n_dirs = rx.iter().collect::<Vec<u64>>().len();
+
+    drop(rx);
+
+
+    let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
+
+    let pb = ProgressBar::new(u64::try_from(n_dirs).unwrap());
+
+    if !conf.prog {
+        pb.set_draw_target(ProgressDrawTarget::stdout());
+
+        pb.set_style(ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:60}] ({eta})"));
+    }
+
+
+
+
+    // Normal search op
+    thread::scope(|scope| {
+        for j in 0..conf.jobs {
+            let conf = conf.clone();
+            let tx = tx.clone();
+            scope.spawn(move |_| {
+                let mut local_q: Worker<PathBuf> = Worker::new_fifo();
+
+                loop {
+                    match find_task(&mut local_q, &global_q) {
+                        Some(mut job) => {
+
 
                             // This should really only be the case, but we'll handle
                             // if its a file too.
@@ -240,7 +317,8 @@ fn main() {
     let mut sizes = [1024, 8192, 131072, 262144, 524288, 1048576, 8388608,
         16777216, 33554432];
     // Print header for log_file
-    writeln!(log_file, "Duration [microsec],Buffer size [B],File hash,File size [B],File");
+    writeln!(log_file, "Duration [microsec]\tBuffer size [B]\tFile hash\t\
+                        File size [B]\tNum Cores\tFile");
     for z in 0..sizes.len() {
         flat.par_iter_mut().for_each(|x| {
             let start = Instant::now();
@@ -248,10 +326,10 @@ fn main() {
             tx.send(x.to_owned()).unwrap();
 
             let duration = start.elapsed().as_micros();
-            println!("{:?},{:?},{},{},{}",
-                     duration, sizes[z], &x.hash.to_string(), &x.size, &x.file_path);
-            writeln!(&log_file, "{:?},{:?},{},{},{}",
-                     duration, sizes[z], &x.hash, &x.size, &x.file_path);
+            println!("{:?}\t{:?}\t{}\t{}\t{}\t{}",
+                     duration, sizes[z], &x.hash.to_string(), &x.size, &conf.jobs, &x.file_path);
+            writeln!(&log_file, "{:?}\t{:?}\t{}\t{}\t{}\t{}",
+                     duration, sizes[z], &x.hash.to_string(), &x.size, &conf.jobs, &x.file_path);
         });
     }
 

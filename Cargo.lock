@@ -2,7 +2,7 @@
 # It is not intended for manual editing.
 [[package]]
 name = "DuFF"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "assert_cmd",
  "byte-unit",
@@ -10,7 +10,7 @@ dependencies = [
  "clap",
  "console",
  "crossbeam",
- "crossbeam-deque 0.8.0",
+ "crossbeam-deque 0.7.3",
  "ignore",
  "indicatif",
  "itertools",

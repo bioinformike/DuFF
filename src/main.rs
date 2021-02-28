@@ -27,10 +27,11 @@ use std::io::Write;
 use crate::util::open_file;
 use chrono::Utc;
 use std::path::PathBuf;
-use std::convert::TryFrom;
+use crate::config::Config;
 
 
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
+static FILES: Emoji = Emoji("🗃️", "");
 static ROCKET: Emoji = Emoji("🚀", "");
 static SCALES: Emoji = Emoji("🧭", "");
 static TREE: Emoji = Emoji("🌴", "");
@@ -42,6 +43,8 @@ static REPORT: Emoji = Emoji("📃️", "");
 fn main() {
 
 
+
+
     // Get user input
     let yams = load_yaml!("../duff_args.yml");
     let matches = App::from(yams).get_matches();
@@ -49,8 +52,8 @@ fn main() {
     // Process user input
     let conf = config::Config::new(matches);
 
-
-    if !conf.prog {
+    // Give the user some immediate feedback that DuFF is running.
+    if !conf.hide_prog {
         println!("[{}, {}] {} Initializing DuFF...",
                  util::dt(),
                  style("01/11").bold().dim(),
@@ -58,59 +61,101 @@ fn main() {
         );
     }
 
-
-
-    let mut report_file = open_file(&conf.report_file, &conf.work_dir,
+    // Open the report file for writing
+    let mut report_file = open_file(&conf.report_file, &conf.out_dir,
                                     conf.user_set_dir);
 
-
-    let mut log_file = open_file(&conf.log_file, &conf.work_dir,
+    // Open the log file for writing.
+    // TODO: This should only be done if the user requested a log file.
+    let mut log_file = open_file(&conf.log_file, &conf.out_dir,
                                     conf.user_set_dir);
 
-    conf.print();
+    if !conf.silent {
+        println!("{}", conf)
+    }
+
+    // TODO: This should only be run if the user requested a log file.
+    // Write out the configuration to the log file
     writeln!(log_file, "{}", conf);
 
-    let file_res: Vec<file_result::FileResult> = vec![];
 
-    let (cnt_tx, cnt_rx) = crossbeam_channel::unbounded::<u64>();
-    let (tx, rx) = crossbeam_channel::unbounded::<PathBuf>();
-
-    let mut dirs = conf.search_path.clone();
-    //let curr_dir = dirs.pop().unwrap();
+    // Create our channels that we will use to send the files we find during directory traversal
+    // down for further processing later.
+    let (tx, rx) =
+        crossbeam_channel::unbounded::<PathBuf>();
 
 
-    // If its a directory read the contents and process
-    // Process:
-    //    if file: create FileResult object and shove down channel
-    //    if directory: throw on global queue
-
-    // Nifty trick picked up from:
-    // https://github.com/elfsternberg/boggle-solver/blob/4dbb9b9e07da493c74fe9299fa8fb7d5b5589151/docs/20190816_Solving_Boggle_Multithreaded.md
+    // Nifty trick picked up from Ken Sternberg's parallel Boggle Solver
+    // [https://github.com/elfsternberg/boggle-solver/blob/4dbb9b9e07da493c74fe9299fa8fb7d5b5589151/docs/20190816_Solving_Boggle_Multithreaded.md]
     let global_q = &{
         let global_q = Injector::new();
 
-        for x in dirs.iter() {
+        // Push our initial directories to search given to use by the user.
+        for x in conf.search_path.iter() {
             global_q.push(PathBuf::from(x))
         }
 
         global_q
     };
 
+    // Setup a spinner to let the user know we are traversing the directory structure.  This didn't
+    // seem like a place to use an actual progress bar since we don't know how many directories we
+    // will actually be traversing.  We could have made it just the length of the user provided
+    // input directories, but from my personal experience with my use case this will be less than
+    // informative as each directory I give it could take quite a long time to actually traverse.
+    // Initialize the spinner out here, so the compiler won't yell at me.
+    let mut spin = ProgressBar::new_spinner();
 
-    // Directory mapping
+    // Update some things about the spinner and get it spinning using steady tick.  We will manually
+    // end the ticking after the traversal is complete.
+    if !conf.hide_prog {
+        spin.set_draw_target(ProgressDrawTarget::stdout());
+        spin.enable_steady_tick(120);
+        spin.set_style(
+            ProgressStyle::default_spinner()
+                .tick_strings(&[
+                    "▰▱▱▱▱▱▱",
+                    "▰▰▱▱▱▱▱",
+                    "▰▰▰▱▱▱▱",
+                    "▰▰▰▰▱▱▱",
+                    "▰▰▰▰▰▱▱",
+                    "▰▰▰▰▰▰▱",
+                    "▰▰▰▰▰▰▰",
+                ])
+                .template("{prefix} {spinner:.blue}"),
+        );
+        spin.set_prefix(&format!("[{}, {}] {} Traversing directories...",
+                                 util::dt(),
+                                 style("02/11").bold().dim(),
+                                 FILES));
+    }
+
+
+
+    // Traversing directories in a multi-threaded fashion, pushing any directories we run into on
+    // global work queue (global_q) and throwing any files we find down tx channel, for further
+    // processing.
     thread::scope(|scope| {
-        for j in 0..conf.jobs {
-            let conf = conf.clone();
+
+        // Only spool up as many jobs as the user request (defaults to 1).
+        for x in 0..conf.jobs {
+
+            // Clone our channel for each thread.
             let tx = tx.clone();
             scope.spawn(move |_| {
+
+                // Create this threads local work queue
                 let mut local_q: Worker<PathBuf> = Worker::new_fifo();
 
+                // Start traversing those directories, grabbing another from the global queue when
+                // finished looking at the current one!
                 loop {
                     match find_task(&mut local_q, &global_q) {
                         Some(mut job) => {
 
-                            // This should really only be the case, but we'll handle
-                            // if its a file too.
+                            // This should be the only case - as only directories will be pushed
+                            // into the global queue and then pulled down into a thread's local
+                            // queue.
                             if job.is_dir() {
 
                                 // Read contents of dir
@@ -122,21 +167,35 @@ fn main() {
                                     }
                                 };
 
+                                // Process the contents of the directory
                                 for entry in dir_ls {
                                     match entry {
+
+                                        // There might be a better way to handle this.
                                         Ok(curr_ent) => {
+
+                                            // Grab the path from the DirEntry as a PathBuf which
+                                            // we will send down the channel.
                                             let curr_pb = curr_ent.path();
+
+                                            // Get Path version of our PathBuf so we can check if
+                                            // it's a directory.
                                             let curr_path = curr_pb.as_path();
 
-                                            // If entry is dir push it into global q
+                                            // If the Path is a directory push it into global q.
+                                            // Otherwise, assume it's a file and send it down the
+                                            // channel.
                                             if curr_path.is_dir() {
                                                 global_q.push(curr_pb);
-                                                cnt_tx.send(1);
                                             } else {
                                                 tx.send(curr_pb);
                                             }
                                         },
+
+                                        // If there was an error with this DirEntry, not sure what
+                                        // we can do beside let the user know and move on.
                                         Err(e) => {
+                                            eprintln!("Error with DirEntry in dir {:?}: {}",job, e);
                                             continue
                                         }
                                     }
@@ -152,128 +211,90 @@ fn main() {
 
     drop(tx);
 
+    // Vector to hold all the PathBufs we found while traversing directories
+    let mut f_ls: Vec<PathBuf> = Vec::new();
 
-    let n_dirs = rx.iter().collect::<Vec<u64>>().len();
+    // Dump the channel contents out into the vec
+    for t in rx.iter() {
+        f_ls.push(t);
+    }
 
     drop(rx);
 
+    // End the directory traversal spinner.
+    spin.finish();
 
-    let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
+    // File processing progress bar, set to length of number of files found in directory traversal.
+    // Initialized out here because if not the compiler complains.
+    let mut pb = ProgressBar::new(f_ls.len() as u64);
 
-    let pb = ProgressBar::new(u64::try_from(n_dirs).unwrap());
+    // Let the user know we have finished directory traversal and we are moving on to actually look
+    // at all the files we found along the way.  Also, set up the progress bar some more.
+    if !conf.hide_prog {
 
-    if !conf.prog {
+        println!("[{}, {}] {} Examining Files...",
+                 util::dt(),
+                 style("03/11").bold().dim(),
+                 MONOCLE
+        );
+
         pb.set_draw_target(ProgressDrawTarget::stdout());
 
         pb.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:60}] ({eta})"));
+            .template("[{elapsed_precise}] [{bar:60}] {pos:>7}/{len:7} ({eta})"));
+
     }
 
+    // Re-init as FileResult channels.
+    let (tx, rx) =
+        crossbeam_channel::unbounded::<file_result::FileResult>();
 
+    // Process each file, getting it's file size and mtime, creating a FileResult object
+    // and pushing that down tx.
+    f_ls.par_iter().for_each( |x| {
 
-
-    // Normal search op
-    thread::scope(|scope| {
-        for j in 0..conf.jobs {
-            let conf = conf.clone();
-            let tx = tx.clone();
-            scope.spawn(move |_| {
-                let mut local_q: Worker<PathBuf> = Worker::new_fifo();
-
-                loop {
-                    match find_task(&mut local_q, &global_q) {
-                        Some(mut job) => {
-
-
-                            // This should really only be the case, but we'll handle
-                            // if its a file too.
-                            if job.is_dir() {
-                                //global_q.push(job);
-
-                                // Read contents of dir
-                                let dir_ls = match job.read_dir() {
-                                    Ok(t) => t,
-                                    Err(e) => {
-                                        eprintln!("[Readdir error] {}", e);
-                                        continue
-                                    }
-                                };
-
-                                for entry in dir_ls {
-                                    match entry {
-                                        Ok(curr_ent) => {
-                                            let curr_pb = curr_ent.path();
-                                            let curr_path = curr_pb.as_path();
-
-                                            // If entry is dir push it into global q
-                                            if curr_path.is_dir() {
-                                                global_q.push(curr_pb);
-                                            } else if curr_path.is_file() {
-                                                let path_str = match curr_path.to_str() {
-                                                    Some(u) => u,
-                                                    None => {
-                                                        eprintln!("Error path-> path_str");
-                                                        continue
-                                                    }
-                                                };
-
-                                                let path_str = String::from(path_str);
-
-                                                let curr_meta = match curr_path.metadata() {
-                                                    Ok(u) => u,
-                                                    Err(e) => {
-                                                        eprintln!("[Meta error] {}", e);
-                                                        continue
-                                                    }
-                                                };
-
-                                                let mtime = match curr_meta.modified() {
-                                                    Ok(u) => u,
-                                                    Err(e) => {
-                                                        eprintln!("[mtime error] {}", e);
-                                                        continue
-                                                    }
-                                                };
-                                                let mtime: chrono::DateTime<Utc> = mtime.into();
-
-                                                let fs = u128::from(curr_meta.len());
-
-                                                let ext_match = util::is_good_ext(curr_path, &conf.exts);
-                                                let size_match = util::is_good_size(fs, conf.ll_size, conf.ul_size);
-
-                                                // Thanks to this SO answer: https://stackoverflow.com/a/33243862
-                                                //dict.entry(fs).or_insert(Vec::new())
-                                                //.push(file_result::FileResult::new(
-                                                //    path_str, fs, mtime));
-
-                                                if ext_match && size_match {
-                                                    tx.send(file_result::FileResult::new(path_str, fs, mtime)).unwrap();
-                                                }
-                                            }
-                                        },
-                                        Err(e) => {
-                                            continue
-                                        }
-                                    }
-                                }
-
-                                println!("Dir: {}", job.to_str().unwrap());
-                            } else if job.is_file() {
-                                println!("File: {}", job.to_str().unwrap());
-                            }
-                        }
-                        None => break,
-                    }
-                }
-            });
+        // Counting chickens...
+        if !conf.hide_prog {
+            pb.inc(1);
         }
-    }).unwrap();
 
+        // Run our process_file function, which will give us back a FileResult struct wrapped in a
+        // Some if this file, x, is able to be processed and matches the user's requested extension
+        // and file size filters.
+        match process_file(x, &conf) {
+            Some(mut fr) => {
+                tx.send(fr);
+            }
+
+            // Totally not sure if this is the way you are supposed to handle this, but it seems to
+            // work...so... ¯\_(ツ)_/¯
+            None => return
+        }
+
+    });
+
+    // Finish off the file processing progress bar
+    pb.finish();
 
     drop(tx);
 
-    let mut dict = HashMap::new();
+    // Let the user know we are done with the file examination step and we are now building our
+    // tree - which could maybe take some time?
+    if !conf.hide_prog {
+        println!("[{}, {}] {} Building initial file tree...",
+                 util::dt(),
+                 style("04/11").bold().dim(),
+                 TREE
+        );
+    }
 
+
+    // We will use a hashmap to collect our results because the key-value structure seemed to be a
+    // natural choice when trying to find duplicate files by file size. Each key represents a
+    // particular file size encountered and then the corresponding value is a vector of FileResult
+    // structs, which will allow us to collate files by their file size making it easy to identify
+    // potential duplicates (if the vector length is > 1).
+    let mut dict = HashMap::new();
 
     // Dump the channel contents out into a vec
     for t in rx.iter() {
@@ -283,62 +304,79 @@ fn main() {
 
     drop(rx);
 
-    // Only keep dict elements where vector has at least 2 elements (dupes)
+    // Only keep an item in the hashmap if the key's (file size) corresponding value (vector of
+    // FileResult structs) has at least 2 elements (dupes)
     dict.retain(|&k, v| v.len() > 1);
 
-    let mut ndupes = 0;
+    // Flatten the hashmap out in this annoying 2-step procedure for further processing. First we
+    // dump all of the hashmap values (vectors of FileResult structs) into a single vector, and then
+    // flatten that vector into 1 overall vector.
+    let flat: Vec<_> = dict.values().collect();
+    let mut flat: Vec<_> = flat.into_iter().flatten().cloned().collect::<Vec<_>>();
 
-    for (_, v) in dict.iter() {
-        ndupes += v.len();
-    }
+    // The number of duplicates we have should now be the length of our flattened tree's flattened
+    // vectors.
+    let n_dupes = flat.len() as u64;
 
-    if ndupes == 0 {
+    // TODO: We need to handle this better, writing out logs and reports if requested, instead of just quitting.
+    if n_dupes == 0 {
         println!("No duplicate files!");
         exit(0)
     }
 
-    if !conf.prog {
+    // Re-init the progress bar with the number of duplicate files.
+    pb = ProgressBar::new(n_dupes);
+
+    // Let the user know how many duplicate files we found (not n_uniq like below), then notify them
+    // we are starting to calculate the hashes, while also setting the progress bar back up.
+    if !conf.hide_prog {
         println!("[{}, {}] {} Found {} duplicate files by size...",
                  util::dt(),
                  style("05/11").bold().dim(),
-                 MONOCLE,
-                 ndupes
+                 LOOKING_GLASS,
+                 n_dupes
         );
+
+
+        println!("[{}, {}] {} Calculating File Hashes...",
+                 util::dt(),
+                 style("06/11").bold().dim(),
+                 ROBOT
+        );
+
+        pb.set_draw_target(ProgressDrawTarget::stdout());
+
+        pb.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] [{bar:60}] {pos:>7}/{len:7} ({eta})"));
     }
 
-    // Create new channels
-    let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
+    // 512 KiB BufReader size
+    let buff_size = 524288;
 
-    // Flatten the dict out for further processing.
-    let flat: Vec<_> = dict.values().collect();
-    let mut flat: Vec<_> = flat.into_iter().flatten().cloned().collect::<Vec<_>>();
+    // Re-init our FileResult channels
+    let (tx, rx) =
+        crossbeam_channel::unbounded::<file_result::FileResult>();
 
-    // 1 KiB  8 KiB 128KiB 256KiB  512KiB  1MiB, 8MiB, 16MiB, 32MiB]
-    let mut sizes = [1024, 8192, 131072, 262144, 524288, 1048576, 8388608,
-        16777216, 33554432];
-    // Print header for log_file
-    writeln!(log_file, "Duration [microsec]\tBuffer size [B]\tFile hash\t\
-                        File size [B]\tNum Cores\tFile");
-    for z in 0..sizes.len() {
-        flat.par_iter_mut().for_each(|x| {
-            let start = Instant::now();
-            x.calc_hash(sizes[z]);
-            tx.send(x.to_owned()).unwrap();
+    // Iterate through all FileResult structs in flat using the calc_hash function
+    // to calculate a hash, and shove the updated FileResult struct down tx. NB the calc_hash
+    // function updates the internal struct hash value.
+    flat.par_iter_mut().for_each(|x| {
 
-            let duration = start.elapsed().as_micros();
-            println!("{:?}\t{:?}\t{}\t{}\t{}\t{}",
-                     duration, sizes[z], &x.hash.to_string(), &x.size, &conf.jobs, &x.file_path);
-            writeln!(&log_file, "{:?}\t{:?}\t{}\t{}\t{}\t{}",
-                     duration, sizes[z], &x.hash.to_string(), &x.size, &conf.jobs, &x.file_path);
-        });
-    }
+        pb.inc(1);
 
-    // Slide modification of what we did above after the directory walking
+        x.calc_hash(buff_size);
+
+        tx.send(x.to_owned()).unwrap();
+
+    });
+
+    // Slight modification of what we did above after the directory walking
     let mut dict = HashMap::new();
 
     drop(tx);
 
-    if !conf.prog {
+    // Let them know we have finished the hash calculations and we are now building a "tree"
+    if !conf.hide_prog {
         println!("[{}, {}] {} Building hash tree...",
                  util::dt(),
                  style("07/11").bold().dim(),
@@ -346,7 +384,8 @@ fn main() {
         );
     }
 
-    // Dump the channel contents out into a vec
+    // Dump all of the updated FileResult structs out of the channel and into a vec for further
+    // processing.
     for t in rx.iter() {
         let key = format!("{}_{}", t.size, t.hash);
 
@@ -355,7 +394,9 @@ fn main() {
 
     drop(rx);
 
-    if !conf.prog {
+    // Update the user to let them know we are about to 'collapse' the hashmap - this might take
+    // some time? Need to do more testing to find out about that.
+    if !conf.hide_prog {
         println!("[{}, {}] {} Identifying duplicate files by hash...",
                  util::dt(),
                  style("08/11").bold().dim(),
@@ -363,30 +404,38 @@ fn main() {
         );
     }
 
+    // Remove any entries from the hashmap that don't have at least 1 duplicate.
     dict.retain(|_, v| v.len() > 1);
 
-    let mut ndupes = 0;
-
+    // n_dupes counts the total number of duplicate files, whereas n_uniq is the number of unique
+    // files that have been duplicated.
+    let mut n_dupes = 0;
+    let mut n_uniq = 0;
     for (_, v) in dict.iter() {
-        ndupes += v.len();
+        n_uniq += 1;
+        n_dupes += v.len();
     }
 
-    if ndupes == 0 {
+    // TODO: Update this to still write out log files or whatever is needed even if no dupes
+    if n_dupes == 0 {
         println!("No duplicate files!");
         exit(0)
     }
 
-
-    if !conf.prog {
-        println!("[{}, {}] {} Found {} duplicate files.",
+    // Let the user know how many duplicate files we found.
+    if !conf.hide_prog {
+        println!("[{}, {}] {} Found {} files that have been duplicated, totaling {} duplicate \
+                 files.",
                  util::dt(),
                  style("09/11").bold().dim(),
                  MONOCLE,
-                 ndupes
+                 n_uniq,
+                 n_dupes
         );
     }
 
-    if !conf.prog {
+    // TODO: Do we actually need this, or can we just skip to writing report?
+    if !conf.hide_prog {
         println!("[{}, {}] {} Wrapping up...",
                  util::dt(),
                  style("10/11").bold().dim(),
@@ -394,221 +443,32 @@ fn main() {
         );
     }
 
-    if !conf.prog {
-        println!("[{}, {}] {} Writing report...",
+    // Letting the user know we are writing the report and where they can find it again.
+    if !conf.hide_prog {
+        println!("[{}, {}] {} Writing report [{}]...",
                  util::dt(),
                  style("11/11").bold().dim(),
                  REPORT,
+                 conf.report_file
         );
+    }
 
-        // write the header line
-        writeln!(report_file, "size hash mtime path");
-        for (k, v) in dict.iter() {
-            for y in v.iter() {
-                writeln!(report_file, "{}", y);
-            }
+    // TODO: Do we need some sort of progress indicator here? How long could this take??
+    // TODO: This format is more for the hash/resume file, we need a better reporting format.
+    // Write the header line
+    writeln!(report_file, "size hash mtime path");
+    for (k, v) in dict.iter() {
+        for y in v.iter() {
+            writeln!(report_file, "{}", y);
         }
     }
 }
-    /*    let mut walker = ignore::WalkBuilder::new(Path::new(curr_dir.as_str()));
-
-        for x in dirs.iter() {
-            walker.add(Path::new(x.as_str()));
-        }
-        walker.threads(conf.jobs as usize);
-        let walker = walker.build_parallel();
-
-        let mut spin = ProgressBar::new_spinner();
-
-        if !conf.prog {
-            spin.set_draw_target(ProgressDrawTarget::stdout());
-            spin.enable_steady_tick(120);
-            spin.set_style(
-                ProgressStyle::default_spinner()
-                    // For more spinners check out the cli-spinners project:
-                    // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
-                    .tick_strings(&[
-                        "▰▱▱▱▱▱▱",
-                        "▰▰▱▱▱▱▱",
-                        "▰▰▰▱▱▱▱",
-                        "▰▰▰▰▱▱▱",
-                        "▰▰▰▰▰▱▱",
-                        "▰▰▰▰▰▰▱",
-                        "▰▰▰▰▰▰▰",
-                    ])
-                    .template("{prefix} {spinner:.blue}"),
-            );
-            spin.set_prefix(&format!("[{}, {}] {} Searching requested directories...",
-                                     util::dt(),
-                                     style("02/11").bold().dim(),
-                                     LOOKING_GLASS));
-        }
-
-    if !conf.prog {
-        println!("[{}, {}] {} Identifying duplicate files by size...",
-                 util::dt(),
-                 style("04/11").bold().dim(),
-                 SCALES
-        );
-    }
-
-    dict.retain(|&k, v| v.len() > 1);
-
-    let mut ndupes = 0;
-
-    for (_, v) in dict.iter() {
-        ndupes += v.len();
-    }
-
-    if ndupes == 0 {
-        println!("No duplicate files!");
-        exit(0)
-    }
-
-    if !conf.prog {
-        println!("[{}, {}] {} Found {} duplicate files by size...",
-                 util::dt(),
-                 style("05/11").bold().dim(),
-                 MONOCLE,
-                 ndupes
-        );
-    }
-
-    let (tx, rx) = crossbeam_channel::unbounded::<file_result::FileResult>();
-
-    let flat: Vec<_> = dict.values().collect();
-    let mut flat: Vec<_> = flat.into_iter().flatten().cloned().collect::<Vec<_>>();
-
-/*//                        1 KiB  8 KiB 128KiB 256KiB  512KiB  1MiB, 8MiB, 16MiB, 32MiB]
-    let mut sizes = [1024, 8192, 131072, 262144, 524288, 1048576, 8388608,
-                              16777216, 33554432];
-        for z in 0..sizes.len() {
-            flat.par_iter_mut().for_each( |x| {
-
-                let start = Instant::now();
-                x.calc_hash(sizes[z]);
-                tx.send(x.to_owned()).unwrap();
-
-                let duration = start.elapsed();
-                println ! ("{:?}, {:?}, {}, {},  {}", duration, sizes[z], & x.hash, &x.size, & x.file_path);
-            });
-    }*/
-
-    if !conf.prog {
-        println!("[{}, {}] {} Calculating hashes for all duplicate files...",
-                 util::dt(),
-                 style("06/11").bold().dim(),
-                 ROBOT,
-        );
-    }
-
-    if !conf.prog {
-        let pb = ProgressBar::with_draw_target(flat.len() as u64,
-                                               ProgressDrawTarget::stdout());
-
-        pb.set_style(ProgressStyle::default_bar()
-            .template("[{percent}%, {elapsed_precise}] [{bar:60.cyan/blue}] {pos:>7}/{len:7} ({eta})")
-            .progress_chars("#>-"));
-
-        flat.par_iter_mut().progress_with(pb).for_each(|x| {
-            let start = Instant::now();
-            x.calc_hash(8192);
-            tx.send(x.to_owned()).unwrap();
-
-            let duration = start.elapsed();
-            //println ! ("{:?}, {:?}, {}, {},  {}", duration, 8192, & x.hash, &x.size, & x.file_path);
-        });
-    } else
-    {
-        flat.par_iter_mut().for_each(|x| {
-            let start = Instant::now();
-            x.calc_hash(8192);
-            tx.send(x.to_owned()).unwrap();
-
-            let duration = start.elapsed();
-        });
-    }
-
-    // Slide modification of what we did above after the directory walking
-    let mut dict = HashMap::new();
-
-    drop(tx);
-
-    if !conf.prog {
-        println!("[{}, {}] {} Building hash tree...",
-                 util::dt(),
-                 style("07/11").bold().dim(),
-                 TREE
-        );
-    }
-
-    // Dump the channel contents out into a vec
-    for t in rx.iter() {
-        let key = format!("{}_{}", t.size, t.hash);
-
-        dict.entry(key).or_insert(Vec::new()).push(t);
-    }
-
-    drop(rx);
-
-    if !conf.prog {
-        println!("[{}, {}] {} Identifying duplicate files by hash...",
-                 util::dt(),
-                 style("08/11").bold().dim(),
-                 SCALES
-        );
-    }
-
-    dict.retain(|_, v| v.len() > 1);
-
-    let mut ndupes = 0;
-
-    for (_, v) in dict.iter() {
-        ndupes += v.len();
-    }
-
-    if ndupes == 0 {
-        println!("No duplicate files!");
-        exit(0)
-    }
-
-
-    if !conf.prog {
-        println!("[{}, {}] {} Found {} duplicate files.",
-                 util::dt(),
-                 style("09/11").bold().dim(),
-                 MONOCLE,
-                 ndupes
-        );
-    }
-
-    if !conf.prog {
-        println!("[{}, {}] {} Wrapping up...",
-                 util::dt(),
-                 style("10/11").bold().dim(),
-                 CLAPPER,
-        );
-    }
-
-    if !conf.prog {
-        println!("[{}, {}] {} Writing report...",
-                 util::dt(),
-                 style("11/11").bold().dim(),
-                 REPORT,
-        );
-
-        // write the header line
-        writeln!(report_file, "size hash mtime path");
-        for (k, v) in dict.iter() {
-            for y in v.iter() {
-                writeln!(report_file, "{}", y);
-            }
-        }*/
 
 
 
-
-
+// The find_task function is "adapted" from Crossbeam's deque docs
+// [https://docs.rs/crossbeam/0.7.1/crossbeam/deque/index.html] and from Ken Sternberg's Parallel
+// Boggle Solver cited above.
 fn find_task<T>(local: &mut Worker<T>, global: &Injector<T>) -> Option<T> {
     match local.pop() {
         Some(job) => Some(job),
@@ -620,4 +480,61 @@ fn find_task<T>(local: &mut Worker<T>, global: &Injector<T>) -> Option<T> {
             }
         },
     }
+}
+
+
+// This function does all the processing of a PathBuf. Specifically, it collects the metadata
+// (filesize and mtime) and will create a new FileResult object which it will return wrapped in a
+// Some, otherwise if this function hits an error or the path in question doesn't satisfy the
+// extension or file size requirements None is returned.
+fn process_file(curr_pb: &PathBuf, curr_conf: &Config) -> Option<file_result::FileResult> {
+
+    // Convert pathbuf to just path then try to get a string representing path
+    let curr_path = curr_pb.as_path();
+    let path_str = match curr_path.to_str() {
+        Some(u) => u,
+        None => {
+            eprintln!("Error converting path to string.");
+            return None;
+        }
+    };
+
+    let path_str = String::from(path_str);
+
+    // Attempt to get the metadata for this file so we can access m-time and file size
+    let curr_meta = match curr_path.metadata() {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("Error collecting metadata. {}", e);
+            return None;
+        }
+    };
+
+    // Grab m-time and convert to UTC time
+    let mtime = match curr_meta.modified() {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("Error capturing mtime for file. {}", e);
+            return None;
+        }
+    };
+
+    let mtime: chrono::DateTime<Utc> = mtime.into();
+
+    // Grab the file size
+    let fs = u128::from(curr_meta.len());
+
+    // Run our extension and size matching checks based on user's input
+    let ext_match = util::check_ext(curr_path, &curr_conf.exts);
+    let size_match = util::check_size(fs,
+                                            curr_conf.ll_size,
+                                            curr_conf.ul_size);
+
+    // As long as this file fits the user's requirements return a FileResult struct, if not just
+    // return a None.
+    if ext_match && size_match {
+        return Some(file_result::FileResult::new(path_str, fs, mtime));
+    }
+
+    return None
 }

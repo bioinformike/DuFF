@@ -1,6 +1,6 @@
 [package]
 name = "DuFF"
-version = "0.5.0"
+version = "0.7.0"
 authors = ["Mike Lape <MikeLape@Gmail.com>"]
 description = "DuFF [Duplicate File Finder]\nAn application to find duplicate files on a filesystem. \n [Report bugs at https://github.com/bioinformike/DuFF/issues]"
 repository = "https://github.com/bioinformike/DuFF"

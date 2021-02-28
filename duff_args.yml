@@ -4,7 +4,7 @@ name: DuFF
 version: "0.7.0"
 about: "DuFF [Duplicate File Finder]: An application to find duplicate files on a filesystem. \n
        [Report bugs at https://github.com/bioinformike/DuFF/issues]"
-author: Mike Lape <lapema@mail.uc.edu>
+author: Mike Lape <MikeLape@Gmail.com>
 
 args:
     # Required argument(s):
@@ -59,7 +59,7 @@ args:
     #
     # lower_lim corresponds to the user set lower limit file size, defaulting to 0 B.
   - lower_lim:
-      help: "Require files to be larger than this value to be considered [Ex: 0B, 5 MB, etc.]".
+      help: "Require files to be greater than or equal to this value for consideration [Ex: 0B, 5 MB, etc.]".
       short: l
       long: lowlim
       multiple: false
@@ -68,7 +68,7 @@ args:
     # upper_lim holds the user specified upper limit file size, defaulting to the max value of a u128
     # 340282366920938463463374607431768211455 B or approx 340 Yottabytes.
   - upper_lim:
-      help: "Require files to be smaller than this value to be considered [Ex: 5MB, 8 GB, etc.]."
+      help: "Require files to be less than or equal to this value for consideration [Ex: 5MB, 8 GB, etc.]."
       short: u
       long: uplim
       multiple: false

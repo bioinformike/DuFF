@@ -51,14 +51,16 @@ pub struct Config {
 
     // Optional Arguments:
 
-    // ll_size corresponds to the user set lower limit file size, defaulting to 0 B. The user input
-    // is read in and handled by byte_unit to convert human friendly values, i.e. 100 MB, into
-    // actual bytes for DuFF internal use.
+    // ll_size corresponds to the user set lower limit file size, defaulting to 0 B. A file will be
+    // required to be greater than or equal to the value of ll_size for further consideration. The
+    // user input is read in and handled by byte_unit to convert human friendly values, i.e. 100 MB,
+    // into actual bytes for DuFF internal use.
     pub ll_size : u128,
 
     // ul_size holds the user specified upper limit file size, defaulting to the max value of a u128
-    // 340282366920938463463374607431768211455 B or approx 340 Yottabytes. User input for ul_size is
-    // handled in the same manner as for ll_size.
+    // 340282366920938463463374607431768211455 B or approx 340 Yottabytes. A file will be required
+    // to be less than or equal to the value of ul_size to be considered further. User input for
+    // ul_size is handled in the same manner as for ll_size.
     pub ul_size : u128,
 
     // jobs will hold the number of "jobs" or threads the user wants us to run DuFF with, defaulting
@@ -136,13 +138,13 @@ impl Config  {
         let mut silent = false;
 
         // Optional Arguments:
-        // min and max size requirement, default for lower will just be 0, so we can use that
-        // even if the user doesn't specify one.  Upper lim will use indicator of
-        // 3
+
+        // Default lower limit is 0 B. File must be >= this value.
         let mut ll_size = 0;
 
         // Default upper limit is 340282366920938463463374607431768211455 B or approx 340
-        // Yottabytes, sooo we should not- I'm sure I'll regret this for some reason.
+        // Yottabytes, sooo we should not- I'm sure I'll regret this for some reason. File must be
+        // <= this upper limit.
         let mut ul_size = 340282366920938463463374607431768211455;
 
         // Default number of threads is 1.

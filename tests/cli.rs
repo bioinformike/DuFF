@@ -2,6 +2,7 @@ use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
 
+// Not currently functional, so not spending time documenting right now.
 
 // Search dir tests
 #[test]

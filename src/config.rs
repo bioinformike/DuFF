@@ -1,87 +1,207 @@
 use crate::util;
 
+// process: To exit when there are errors
+// env: To grab the current working directory, if needed
+// fs: To complete simple checks on input search directories.
+// fmt: Display trait implementation
 use std::{process, env, fs, fmt};
-use pretty_bytes::converter;
+
+// Allows for reading in more human friendly values for lower and upper limits
 use byte_unit::{Byte, ByteUnit};
+
+// Allows for more human friendly printing of byte values for lower and upper limits.
+use pretty_bytes::converter;
+
+// clap makes all of this work, but more specificly needed here as Config::new takes an ArgMatches
+// value as it's only argument.
 use clap::ArgMatches;
 
-
+// The Config struct is simply here to contain the user input that is obtained using clap.
 #[derive(Debug, Clone)]
 pub struct Config {
 
+    // Required argument(s):
+    // NB If the user only specifies a search_path we set out_dir to the current working directory,
+    // and if we cannot write there then we fail, as we need to be at least able to write out the
+    // report file.
+
+    // The directories the user requested we search for duplicate files within. The user will give
+    // DuFF a comma separated list of directories, but internally we simply store that as a vector
+    // of Strings.
     pub search_path: Vec<String>,
+
+
+    // Optional flags:
+
+    // The archive flag tells DuFF to save the calculated hashes for future re-use.
     pub archive : bool,
-    pub debug   : bool,
-    pub prog    : bool,
-    pub resume  : bool,
-    pub have_hash : bool,
-    pub user_set_dir : bool,
+
+    // The log flag tells DuFF to save a log file for future re-runs of DuFF where we can skip the
+    // directory traversal and file examination, instead jumping directly to hashing.
+    pub log : bool,
+
+    // The hide_prog flag tells DuFF that the user doesn't want to see progress information.
+    pub hide_prog : bool,
+
+    // The silent flag tells DuFF that the user doesn't want anything put into stdout. This is
+    // pretty similar to hide_prog, but with just hide_prog we will still echo the DuFF
+    // configuration back to the user, but the silent flag disables this.
+    pub silent : bool,
+
+
+    // Optional Arguments:
+
+    // ll_size corresponds to the user set lower limit file size, defaulting to 0 B. The user input
+    // is read in and handled by byte_unit to convert human friendly values, i.e. 100 MB, into
+    // actual bytes for DuFF internal use.
+    pub ll_size : u128,
+
+    // ul_size holds the user specified upper limit file size, defaulting to the max value of a u128
+    // 340282366920938463463374607431768211455 B or approx 340 Yottabytes. User input for ul_size is
+    // handled in the same manner as for ll_size.
+    pub ul_size : u128,
+
+    // jobs will hold the number of "jobs" or threads the user wants us to run DuFF with, defaulting
+    // to 1 thread.
+    pub jobs : u64,
+
+    // exts holds the extensions that the user wanted to limit our search of files to.  The user
+    // inputs a comma separated list of extensions on the command line, but we parse that and
+    // internally store each extension as a String in this vector.  If the user doesn't specify any
+    // extensions then a single String will be added to this vector, "*", telling the code there is
+    // no user requested extension filtering to worry about.
+    pub exts : Vec<String>,
+
+    // out_dir will hold the directory the user wants us to write files to, defaulting to the
+    // current working directory.  If we cannot write to out_dir, the program will fail, letting the
+    // user know the reason.
+    pub out_dir : String,
+
+    // res_file will hold a path to a user provided log file produced from a previous DuFF run with
+    // the log flag on.
     pub res_file : String,
-    pub ll_size     : u128,
-    pub ul_size     : u128,
-    pub jobs     : u64,
 
-    pub work_dir : String,
-    pub work_file : String,
-
-    pub hash_file : String,
+    // prev_hash_file will hold the path to where the user specified 'hash file' is located, which
+    // is the file that gets generated running DuFF with the archive flag on.
     pub prev_hash_file : String,
 
-    pub report_file     : String,
-    pub log_file : String,
-    pub temp_file : String,
 
-    pub exts      : Vec<String>
+    // INTERNAL ARGUMENTS: Arguments not directly set by the user, but set in response to different
+    //                     user input.
+
+    // A string representing the path of where hashes should be saved if the user requested them to
+    // be saved with the archive flag. It will be inside the specified or default out_dir.
+    pub archive_file : String,
+
+    // A string representing the path of where the log should be saved if the user requested it be
+    // saved with the log flag. It will be inside the specified or default out_dir.
+    pub log_file : String,
+
+    // A string representing the path to where the report will be written. It will be inside the
+    // specified or default out_dir.
+    pub report_file: String,
+
+
+    // INTERNAL FLAGS: Flags not directly set by the user, but set in response to different user
+    //                 input.
+
+    // The resume flag is set by DuFF if the user provides a previous DuFF log generated
+    // using the debug flag.
+    pub resume : bool,
+
+    // The have_hash flag is set by DuFF if the user provides a hash file (using -hash argument).
+    // This hash file must be generated by a previous run of DuFF in which the user specified the -a
+    // flag.
+    pub have_hash : bool,
+
+    // The user_set_dir flag is set by DuFF if the user provides an output directory (using the -out
+    // argument).  This flag is used to decide which error messages should be sent to the user if
+    // we try to open the report file for writing, but it is determine we cannot for some reason.
+    pub user_set_dir : bool,
 }
 
 
 impl Config  {
     pub fn new(in_args: ArgMatches) -> Config {
 
-        // Flags
-        let mut is_arch = false;
-        let mut is_debug = false;
-        let mut is_prog = false;
-        let mut is_res = false;
-        let mut have_precomp_hash = false;
-        let mut user_set_dir = false;
+        // Initialize a bunch of placeholders that we will use to generate a new Config struct.
+        // Required argument(s):
+        // We don't initialize any required parameters up here, because since they are required, if
+        // the user didn't specify them, the program would have already failed.
 
+        // Optional flags:
+        let mut archive = false;
+        let mut log = false;
+        let mut hide_prog = false;
+        let mut silent = false;
 
-        // Files from previous work
-        let mut prev_hash = String::from("");
-        let mut res_file = String::from("");
-
-
-        let mut work_dir = String::from("");
-
+        // Optional Arguments:
         // min and max size requirement, default for lower will just be 0, so we can use that
         // even if the user doesn't specify one.  Upper lim will use indicator of
-        // 18446744073709551615 which is largest number u64 can hold and would be equal to  ~18EB
-        // sooo we should not have to worry about this.
+        // 3
         let mut ll_size = 0;
+
+        // Default upper limit is 340282366920938463463374607431768211455 B or approx 340
+        // Yottabytes, sooo we should not- I'm sure I'll regret this for some reason.
         let mut ul_size = 340282366920938463463374607431768211455;
 
-        // Number of jobs to use
+        // Default number of threads is 1.
         let mut jobs = 1;
 
-        // Extension string
+        // Default extension is just "*".
         let mut exts: Vec<String> = vec![String::from("*")];
 
+        // out_dir needs to be initialized up here for the compiler to be happy.
+        let mut out_dir = String::from("");
 
+        // Files from previous work - initialize to empty strings, we use bools to tell DuFF whether
+        // to try to open these for writing.
+        let mut res_file = String::from("");
+        let mut prev_hash_file = String::from("");
+
+        // INTERNAL ARGUMENTS:
+        let mut archive_file = String::from("");
+        let mut log_file = String::from("");
+
+        // INTERNAL FLAGS:
+        let mut resume = false;
+        let mut have_hash = false;
+        let mut user_set_dir= false;
+
+
+        // Start processing user input
+
+
+        // Required argument(s):
+        // I feel OK using unwrap here because this is a required argument, so clap will have to
+        // have received some kind of string here for DuFF to even get to this point.
         let paths = in_args.value_of("dir").unwrap();
+
+        // Split the string from clap into separate directory paths using comma delimiter.
+        // Skip checking these files here as we will do that in the next step.
         let path_vec: Vec<String> = paths.split(',').map(|s| s.to_string()).collect();
 
-        // Check each dir handed in to make sure its accessible and a directory.
+        // Check each input and parsed directory to make sure its accessible and is a directory.
         for x in path_vec.iter() {
+
+            // Getting a metadata object for the path string the user provided
+            // TODO: Write check to see if a dir w/o read perms returns OK or ERR
+            // TODO: Should we exit if there is an issue with one of the dirs or just try to contin?
             match fs::metadata(x) {
                 Ok(m) => {
+
+                    // Check to see if this is actually a directory and if it is not then send an
+                    // error to stderr and exit, if it is a directory we should be good to go.
                     if m.is_dir() == false {
                         let err_str = format!("Specified directory {} is not a directory!",
                                               x);
-                        eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                        eprintln!("{}", textwrap::fill(err_str.as_str(),
+                                                       textwrap::termwidth()));
                         process::exit(1);
                     }
                 },
+                // If there was some unknown (to me) error then capture it and send it to stderr and
+                // exit
                 Err(e) => {
                     let err_str = format!("There was an error with the specified directory, {}: {}!",
                                           x, e.to_string());
@@ -91,35 +211,51 @@ impl Config  {
             }
         }
 
-        // Deal with our flag options
+
+        // Optional flags:
+
         if in_args.is_present("archive") {
-            is_arch = true;
+            archive = true;
         }
 
-        if in_args.is_present("debug") {
-            is_debug = true;
+        if in_args.is_present("log") {
+            log = true;
         }
 
         if in_args.is_present("prog") {
-            is_prog = true;
+            hide_prog = true;
         }
 
-        // Deal with arguments
+        if in_args.is_present("silent") {
+            silent = true;
 
-        // Minimum size specification in bytes!
+            // If the user wants silence, we're not going to let them see progress, because that
+            // wouldn't be silence, would it?
+            hide_prog = true;
+        }
+
+
+        // Optional Arguments:
+
+        // Try to capture user input with byte_unit's handy string to Byte function and if byte_unit
+        // can understand the user input convert it to bytes, otherwise send an error message to the
+        // user
+        // TODO: What does a byte_unit error look like for a unit it doesn't comprehend?
         if let Some(ll) = in_args.value_of("lower_lim") {
             match Byte::from_str(ll) {
                 Ok(n) => ll_size = n.get_bytes(),
                 Err(e) => {
                     let err_str = format!("Lower size limit {}: {}!",
                                           ll, e.to_string());
-                    eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    eprintln!("{}", textwrap::fill(err_str.as_str(),
+                                                   textwrap::termwidth()));
                     process::exit(1);
                 },
             }
         }
 
-        // Max file size value
+        // Same logic as for handling the lower limit input.
+        // TODO: What if the user requests a number over 340 YB?
         if let Some(ul) = in_args.value_of("upper_lim") {
             match Byte::from_str(ul) {
                 Ok(n) => ul_size = n.get_bytes(),
@@ -132,165 +268,181 @@ impl Config  {
             }
         }
 
-
+        // Try to parse the number of jobs the user specified into a u64 and if it cannot be
+        // successfully parsed then just send an error message and die.
         if let Some(n_jobs) = in_args.value_of("jobs") {
             match n_jobs.parse::<u64>() {
                 Ok(n) => jobs = n,
                 Err(_e) => {
-                    let err_str = format!("Number of jobs specificed, {}, is not a valid number!",
-                                          n_jobs);
-                    eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    let err_str = format!("Number of jobs specificed, {}, is not a valid \
+                                                  number!", n_jobs);
+                    eprintln!("{}", textwrap::fill(err_str.as_str(),
+                                                   textwrap::termwidth()));
                     process::exit(1);
                 },
             }
         }
 
 
-        // Extensions to search for, comma separated values.
+        // Read in the string the user gave us that should contain comma separated extensions they
+        // want to require for files and try to split on commas. There aren't really QC checks
+        // being done here, but what can be done?
         if let Some(in_exts) = in_args.value_of("exts") {
+
+            // Leaving the unwrap as we wouldn't get into this block unless clap gave us something
+            // for exts above in the if let Some condition.
             let in_exts = in_args.value_of("exts").unwrap();
             exts = in_exts.split(',').map(|s| s.to_string()).collect();
         }
 
-        // If they want us to resume then they need to give us a resume file that contains
-        // all search results and we will skip directly to sorting, finding size dupes, then hashing
-        if let Some(res_f) = in_args.value_of("resume") {
-            res_file = res_f.to_string();
-            is_res = true;
-        }
-
-        // If they have precomputed hash file we will load this in and skip any files in the hash
-        // file.
-        if let Some(hash_f) = in_args.value_of("hash") {
-            prev_hash = hash_f.to_string();
-            have_precomp_hash = true;
-        }
-
-        // Get work directory, if the user doesn't give us one we try to use cwd and if that fails
-        // we quit!
-        if let Some(work_d) = in_args.value_of("work_dir") {
-            work_dir = work_d.to_string();
+        // See if the user specified an output directory and if so capture it.
+        if let Some(out_d) = in_args.value_of("out_dir") {
+            out_dir = out_d.to_string();
             user_set_dir = true;
+
         } else {
-            // File paths
+
+            // They didn't give us a output directory so grab the cwd, if that doesn't work die!
+            // env::current_dir returns an error if it doesn't exist or user has insufficient perms.
             let cwd = match env::current_dir() {
                 Ok(t) => t,
                 Err(e) => {
-                    let err_str = format!("Could not use current working directory, please specify where {} can \
-                              store temporary files and the final report using the -f (--file) \
-                              argument. \nError text: {}", util::PROG_NAME.to_owned() + util::PROG_VERS, e);
-                    eprintln!("{}", textwrap::fill(err_str.as_str(), textwrap::termwidth()));
+                    let err_str = format!("Could not use the current working directory to \
+                                store output, please specify where {} can write the final report \
+                                using the -o (--out_dir) argument. \nError text: {}",
+                                util::PROG_NAME.to_owned() + util::PROG_VERS, e);
+                    eprintln!("{}", textwrap::fill(err_str.as_str(),
+                                                   textwrap::termwidth()));
 
                     std::process::exit(1);
                 }
             };
-            work_dir = String::from(cwd.to_str().unwrap())
+
+            // Stuff the cwd into a string for out_dir variable
+            // TODO: Should we trust unwrap here? We know it will be a PathBuf since its from env.
+            out_dir = String::from(cwd.to_str().unwrap());
         }
 
 
+        // If they want us to resume then they need to give us a log file from a previous DuFF run,
+        // which we will just take as a string, but should probably do some checks on.
+        // TODO: Add some checks to validate this file - maybe not in this function though!
+        if let Some(res_f) = in_args.value_of("resume") {
+            res_file = res_f.to_string();
+
+            // If they give us a resume file we switch on resume.
+            resume = true;
+        }
+
+        // If they have precomputed hash file we will load this in and skip calculating hashes for
+        // any files listed in this hash file that still have a current m-time.
+        // TODO: We should probably also add checks to validate this file - again not here though!
+        if let Some(hash_f) = in_args.value_of("hash") {
+            prev_hash_file = hash_f.to_string();
+
+            // If they give us a hash file, switch on have_hash
+            have_hash = true;
+        }
+
+
+        // Other work
+
         // Specify the paths for our working files, we'll create them later.
-        let work_file = format!("{}/DuFF_{}.working", work_dir, util::f_dt());
-        let hash_file = format!("{}/DuFF_{}.hash", work_dir, util::f_dt());
-        let log_file = format!("{}/DuFF_{}.log", work_dir, util::f_dt());
-        let temp_file = format!("{}/DuFF_{}.temp", work_dir, util::f_dt());
+        if archive {
+            archive_file = format!("{}/DuFF_{}.hash", out_dir, util::f_dt());
+        }
 
-        let report_file_str = format!("{}/DuFF_{}.report", work_dir, util::f_dt());
-        let report_file = report_file_str.clone();
+        if log {
+            log_file = format!("{}/DuFF_{}.log", out_dir, util::f_dt());
+        }
 
+        let report_file = format!("{}/DuFF_{}.report", out_dir, util::f_dt());
+
+        // I know a lot of these can be simplified due to the matching names, but I prefer
+        // explicitly specifying the values instead.
         Config {
-            search_path: path_vec,
-            exts: exts,
 
+            // Required argument(s):
+            search_path: path_vec,
+
+            // Optional flags:
+            archive: archive,
+            log: log,
+            hide_prog: hide_prog,
+            silent: silent,
+
+            // Optional Arguments:
             ll_size: ll_size,
             ul_size: ul_size,
             jobs: jobs,
-
-            archive: is_arch,
-            debug: is_debug,
-            prog: is_prog,
-            user_set_dir : user_set_dir,
-
-            resume: is_res,
+            exts: exts,
+            out_dir: out_dir,
             res_file: res_file,
-
-            work_dir: work_dir,
-            work_file: work_file,
-
-            hash_file: hash_file,
-            have_hash: have_precomp_hash,
-            prev_hash_file: prev_hash,
-
-            report_file: report_file,
+            prev_hash_file: prev_hash_file,
+            
+            // INTERNAL ARGUMENTS:
+            archive_file: archive_file,
             log_file: log_file,
-            temp_file: temp_file
-        }
-    }
+            report_file: report_file,
 
-    pub fn print(&self) {
-
-        let border_str = "=".repeat(textwrap::termwidth());
-        println!("{}", border_str);
-        println!("{:<21} {:^39} {:>0}", util::dt(), "Overview", util::PROG_NAME.to_owned() + " v" + util::PROG_VERS);
-        println!("{}", border_str);
-        println!("{:<40} {:>1}", "Status:", "New Run" );
-        println!("{:<40} {:>1}", "Search Directories:", self.search_path.join(","));
-        println!("{:<40} {:>1}", "Extensions:", self.exts.join(", "));
-
-        // If they set a lower lim
-        if self.ll_size > 0 {
-            let ll_str = converter::convert(self.ll_size as f64);
-            println!("{:<40} {:>1}", "Minimum Size:", ll_str );
+            // INTERNAL FLAGS:
+            resume: resume,
+            have_hash: have_hash,
+            user_set_dir: user_set_dir,
 
         }
-        // If they set a upper lim
-        if self.ul_size < 340282366920938463463374607431768211455 {
-            let ul_str = converter::convert(self.ul_size as f64);
-            println!("{:<40} {:>1}", "Maximum Size:", ul_str);
-        }
-
-        println!("{:<40} {:>1}", "Number of Threads:", self.jobs);
-        println!("{:<40} {:>1}", "Working Directory:", self.work_dir);
-        println!("{:<40} {:>1}", "Final Report:", self.report_file);
-        println!("{:<40} {:>1}", "Save Hashes:", self.archive);
-        println!("{:<40} {:>1}", "Debug Mode:", self.debug);
-        println!("{:<40} {:>1}", "Show Progress:", self.prog);
-        println!("{:<40} {:>1}", "Report any issues at:", util::PROG_ISSUES);
-
-
-
     }
 }
 
+// Implementing the Display trait so that we can easily print out the DuFF configuration both out
+// to stdout as well as to a log file if needed.
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+        // Using this border string to make a box around the DuFF header.
         let border_str = "=".repeat(textwrap::termwidth());
         writeln!(f, "{}", border_str);
-        writeln!(f, "{:<21} {:^39} {:>0}", util::dt(), "Overview", util::PROG_NAME.to_owned() + " v" + util::PROG_VERS);
+        writeln!(f, "{:<21} {:^39} {:>0}", util::dt(), "Overview", util::PROG_NAME.to_owned() +
+                " v" + util::PROG_VERS);
         writeln!(f, "{}", border_str);
+
+        // TODO: Add logic to update this if the user specified we should resume.
         writeln!(f, "{:<40} {:>1}", "Status:", "New Run" );
         writeln!(f, "{:<40} {:>1}", "Search Directories:", self.search_path.join(","));
         writeln!(f, "{:<40} {:>1}", "Extensions:", self.exts.join(", "));
 
-        // If they set a lower lim
+        // Use the default value of ll to determine if the user specified one and if they did we
+        // print it out, if they didn't we don't print it out so as to not confuse the user.
         if self.ll_size > 0 {
             let ll_str = converter::convert(self.ll_size as f64);
             writeln!(f, "{:<40} {:>1}", "Minimum Size:", ll_str );
 
         }
-        // If they set a upper lim
+
+        // Handled in the same manner as ll_size, except now comparing to max u128 value.
         if self.ul_size < 340282366920938463463374607431768211455 {
             let ul_str = converter::convert(self.ul_size as f64);
             writeln!(f, "{:<40} {:>1}", "Maximum Size:", ul_str);
         }
 
+
         writeln!(f, "{:<40} {:>1}", "Number of Threads:", self.jobs);
-        writeln!(f, "{:<40} {:>1}", "Working Directory:", self.work_dir);
+        writeln!(f, "{:<40} {:>1}", "Output Directory:", self.out_dir);
         writeln!(f, "{:<40} {:>1}", "Final Report:", self.report_file);
         writeln!(f, "{:<40} {:>1}", "Save Hashes:", self.archive);
-        writeln!(f, "{:<40} {:>1}", "Debug Mode:", self.debug);
-        writeln!(f, "{:<40} {:>1}", "Show Progress:", self.prog);
+        writeln!(f, "{:<40} {:>1}", "Save Log:", self.log);
+
+        // If they set silent mode then report this, otherwise print the hide progress setting.
+        if self.silent == true {
+            writeln!(f, "{:<40} {:>1}", "Silent Mode:", self.silent);
+        } else {
+            writeln!(f, "{:<40} {:>1}", "Hide Progress:", self.hide_prog);
+        }
+
         writeln!(f, "{:<40} {:>1}", "Report any issues at:", util::PROG_ISSUES);
 
+        // I didn't try to catch any errors in here because I didn't see any locations for that, so
+        // just returning OK.
         Ok(())
     }
 }

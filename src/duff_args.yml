@@ -59,7 +59,7 @@ args:
     #
     # lower_lim corresponds to the user set lower limit file size, defaulting to 0 B.
   - lower_lim:
-      help: "Require files to be greater than or equal to this value for consideration [Ex: 0B, 5 MB, etc.]".
+      help: "Require files to be greater than or equal to this value for consideration [Ex: 0B, 5 MB, etc.]."
       short: l
       long: lowlim
       multiple: false

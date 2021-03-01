@@ -8,7 +8,7 @@ use crate::util;
 use std::{process, env, fs, fmt};
 
 // Allows for reading in more human friendly values for lower and upper limits
-use byte_unit::{Byte, ByteUnit};
+use byte_unit::Byte;
 
 // Allows for more human friendly printing of byte values for lower and upper limits.
 use pretty_bytes::converter;
@@ -154,8 +154,8 @@ impl Config  {
         // Default extension is just "*".
         let mut exts: Vec<String> = vec![String::from("*")];
 
-        // out_dir needs to be initialized up here for the compiler to be happy.
-        let mut out_dir = String::from("");
+        // out_dir needs to be mentioned up here for the compiler to be happy.
+        let out_dir;
 
         // Files from previous work - initialize to empty strings, we use bools to tell DuFF whether
         // to try to open these for writing.
@@ -164,7 +164,7 @@ impl Config  {
 
         // INTERNAL ARGUMENTS:
         let mut archive_file = String::from("");
-        let mut log_file = String::from("");
+        let log_file;
 
         // INTERNAL FLAGS:
         let mut resume = false;
@@ -290,11 +290,11 @@ impl Config  {
         // Read in the string the user gave us that should contain comma separated extensions they
         // want to require for files and try to split on commas. There aren't really QC checks
         // being done here, but what can be done?
-        if let Some(in_exts) = in_args.value_of("exts") {
+        if let Some(mut in_exts) = in_args.value_of("exts") {
 
             // Leaving the unwrap as we wouldn't get into this block unless clap gave us something
             // for exts above in the if let Some condition.
-            let in_exts = in_args.value_of("exts").unwrap();
+            in_exts = in_args.value_of("exts").unwrap();
             exts = in_exts.split(',').map(|s| s.to_string()).collect();
         }
 
@@ -356,10 +356,15 @@ impl Config  {
         }
 
         if log {
+
             log_file = format!("{}/DuFF_{}.log", out_dir, util::f_dt());
+        } else {
+            // This is  shitty solutionm but I need to be able to open a log file even if they don't
+            // want it.  If they don't want it I'll leave it hidden and will clean it up.
+            log_file = format ! ("{}/.DuFF_{}.log", out_dir, util::f_dt());
         }
 
-        let report_file = format!("{}/DuFF_{}.report", out_dir, util::f_dt());
+    let report_file = format!("{}/DuFF_{}.report", out_dir, util::f_dt());
 
         // I know a lot of these can be simplified due to the matching names, but I prefer
         // explicitly specifying the values instead.
@@ -404,48 +409,54 @@ impl fmt::Display for Config {
 
         // Using this border string to make a box around the DuFF header.
         let border_str = "=".repeat(textwrap::termwidth());
-        writeln!(f, "{}", border_str);
-        writeln!(f, "{:<21} {:^39} {:>0}", util::dt(), "Overview", util::PROG_NAME.to_owned() +
-                " v" + util::PROG_VERS);
-        writeln!(f, "{}", border_str);
+        let mut out_str = format!("{}\n", border_str).to_owned();
+        out_str.push_str(format!("{:<21} {:^39} {:>0}\n", util::dt(), "Overview",
+                                 util::PROG_NAME.to_owned() + " v" + util::PROG_VERS).as_str());
+        out_str.push_str(format!("{}\n", border_str).as_str());
 
-        // TODO: Add logic to update this if the user specified we should resume.
-        writeln!(f, "{:<40} {:>1}", "Status:", "New Run" );
-        writeln!(f, "{:<40} {:>1}", "Search Directories:", self.search_path.join(","));
-        writeln!(f, "{:<40} {:>1}", "Extensions:", self.exts.join(", "));
+        if self.resume {
+            out_str.push_str(format!("{:<40} {:>1}\n", "Status:", "Resuming" ).as_str());
+        } else {
+            out_str.push_str(format!("{:<40} {:>1}\n", "Status:", "New Run" ).as_str());
+        }
+
+        out_str.push_str(format!("{:<40} {:>1}\n", "Search Directories:",
+                                 self.search_path.join(",")).as_str());
+
+        out_str.push_str(format!("{:<40} {:>1}\n", "Extensions:", self.exts.join(", "))
+                .as_str());
+
 
         // Use the default value of ll to determine if the user specified one and if they did we
         // print it out, if they didn't we don't print it out so as to not confuse the user.
         if self.ll_size > 0 {
             let ll_str = converter::convert(self.ll_size as f64);
-            writeln!(f, "{:<40} {:>1}", "Minimum Size:", ll_str );
+            out_str.push_str(format!("{:<40} {:>1}\n", "Minimum Size:", ll_str).as_str());
 
         }
 
         // Handled in the same manner as ll_size, except now comparing to max u128 value.
         if self.ul_size < 340282366920938463463374607431768211455 {
             let ul_str = converter::convert(self.ul_size as f64);
-            writeln!(f, "{:<40} {:>1}", "Maximum Size:", ul_str);
+            out_str.push_str(format!("{:<40} {:>1}\n", "Maximum Size:", ul_str).as_str());
+
         }
 
+        out_str.push_str(format!("{:<40} {:>1}\n", "Number of Threads:", self.jobs).as_str());
+        out_str.push_str(format!("{:<40} {:>1}\n", "Output Directory:", self.out_dir).as_str());
+        out_str.push_str(format!("{:<40} {:>1}\n", "Final Report:", self.report_file).as_str());
+        out_str.push_str(format!("{:<40} {:>1}\n", "Save Hashes:", self.archive).as_str());
+        out_str.push_str(format!("{:<40} {:>1}\n", "Save Log:", self.log).as_str());
 
-        writeln!(f, "{:<40} {:>1}", "Number of Threads:", self.jobs);
-        writeln!(f, "{:<40} {:>1}", "Output Directory:", self.out_dir);
-        writeln!(f, "{:<40} {:>1}", "Final Report:", self.report_file);
-        writeln!(f, "{:<40} {:>1}", "Save Hashes:", self.archive);
-        writeln!(f, "{:<40} {:>1}", "Save Log:", self.log);
 
-        // If they set silent mode then report this, otherwise print the hide progress setting.
-        if self.silent == true {
-            writeln!(f, "{:<40} {:>1}", "Silent Mode:", self.silent);
-        } else {
-            writeln!(f, "{:<40} {:>1}", "Hide Progress:", self.hide_prog);
+        if self.hide_prog == true {
+            out_str.push_str(format!("{:<40} {:>1}\n", "Hide Progress:", self.hide_prog)
+                .as_str());
         }
 
-        writeln!(f, "{:<40} {:>1}", "Report any issues at:", util::PROG_ISSUES);
+        out_str.push_str(format!("{:<40} {:>1}\n", "Report any issues at:", util::PROG_ISSUES)
+                .as_str());
 
-        // I didn't try to catch any errors in here because I didn't see any locations for that, so
-        // just returning OK.
-        Ok(())
+        write!(f, "{}", out_str)
     }
 }

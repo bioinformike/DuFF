@@ -1,5 +1,5 @@
 [package]
-name = "DuFF"
+name = "duff"
 version = "0.7.0"
 authors = ["Mike Lape <MikeLape@Gmail.com>"]
 description = "DuFF [Duplicate File Finder]\nAn application to find duplicate files on a filesystem. \n [Report bugs at https://github.com/bioinformike/DuFF/issues]"
@@ -9,22 +9,26 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "2", features = ["yaml", "wrap_help"] }
 
-walkdir = "2"
-crossbeam  = "*"
-crossbeam-deque = "*"
-ignore = "*"
-ring = "*"
-chrono = "*"
-textwrap = "*"
-pretty-bytes = "0.2.2"
-twox-hash= "*"
-itertools = "*"
-rayon = "*"
-byte-unit = "*"
-indicatif = {version = "*", features = ["rayon"]}
-console = "*"
+# Parallelism
+rayon = "^1"
+crossbeam-utils = "^0"
+crossbeam-deque = "^0"
+crossbeam-channel = "^0"
+
+# Miscellaneous
+clap = { version = "^2", features = ["yaml", "wrap_help"] }
+chrono = "^0"
+
+# I/O and Progress
+indicatif = {version = "^0", features = ["rayon"]}
+console = "^0"
+textwrap = "0.11.0"
+pretty-bytes = "^0"
+byte-unit = "^4"
+
+# Hashing
+twox-hash= "^1"
 
 [dev-dependencies]
 assert_cmd = "0.10"

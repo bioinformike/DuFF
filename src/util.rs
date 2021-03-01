@@ -4,14 +4,22 @@
 // I sometimes use extra parens to make thing more readable to me
 #![allow(unused_parens)]
 
+// Both are required for process_file function
+use crate::config::Config;
+use crate::file_result;
+
 // For our datetime helper functions (dt and f_dt)
 use chrono::{DateTime, Utc};
 
 // To create files for output (open_file)
 use std::fs::File;
 
-// Paths are taken as input to 2 functions (open_file, check_ext)
-use std::path::Path;
+// Paths are taken as input to 3 functions (open_file, check_ext, process_file)
+use std::path::{Path, PathBuf};
+
+// For the find task function
+use crossbeam_deque::{Injector, Worker, Steal};
+
 
 // Extract some info from our manifest file to be used at different places for output to user.
 pub const PROG_NAME: &'static str = env!("CARGO_PKG_NAME");
@@ -122,4 +130,78 @@ pub fn check_size(curr_fs: u128, min_size: u128, max_size: u128) -> bool {
     // = ~340 Yottabytes)
     ((curr_fs >= min_size) & (curr_fs <= max_size))
 
+}
+
+
+// The find_task function is "adapted" from Crossbeam's deque docs
+// [https://docs.rs/crossbeam/0.7.1/crossbeam/deque/index.html] and from Ken Sternberg's Parallel
+// Boggle Solver cited above.
+pub fn find_task<T>(local: &mut Worker<T>, global: &Injector<T>) -> Option<T> {
+    match local.pop() {
+        Some(job) => Some(job),
+        None => loop {
+            match global.steal() {
+                Steal::Success(job) => break Some(job),
+                Steal::Empty => break None,
+                Steal::Retry => {}
+            }
+        },
+    }
+}
+
+
+// This function does all the processing of a PathBuf. Specifically, it collects the metadata
+// (filesize and mtime) and will create a new FileResult object which it will return wrapped in a
+// Some, otherwise if this function hits an error or the path in question doesn't satisfy the
+// extension or file size requirements None is returned.
+pub fn process_file(curr_pb: &PathBuf, curr_conf: &Config) -> Option<file_result::FileResult> {
+
+    // Convert pathbuf to just path then try to get a string representing path
+    let curr_path = curr_pb.as_path();
+    let path_str = match curr_path.to_str() {
+        Some(u) => u,
+        None => {
+            eprintln!("Error converting path to string.");
+            return None;
+        }
+    };
+
+    let path_str = String::from(path_str);
+
+    // Attempt to get the metadata for this file so we can access m-time and file size
+    let curr_meta = match curr_path.metadata() {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("Error collecting metadata. {}", e);
+            return None;
+        }
+    };
+
+    // Grab m-time and convert to UTC time
+    let mtime = match curr_meta.modified() {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("Error capturing mtime for file. {}", e);
+            return None;
+        }
+    };
+
+    let mtime: chrono::DateTime<Utc> = mtime.into();
+
+    // Grab the file size
+    let fs = u128::from(curr_meta.len());
+
+    // Run our extension and size matching checks based on user's input
+    let ext_match = check_ext(curr_path, &curr_conf.exts);
+    let size_match = check_size(fs,
+                                      curr_conf.ll_size,
+                                      curr_conf.ul_size);
+
+    // As long as this file fits the user's requirements return a FileResult struct, if not just
+    // return a None.
+    if ext_match && size_match {
+        return Some(file_result::FileResult::new(path_str, fs, mtime));
+    }
+
+    return None
 }

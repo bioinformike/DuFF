@@ -2,32 +2,51 @@ mod util;
 mod config;
 mod file_result;
 
-//use crate::util;
-//use crate::config;
-//use crate::file_result::*;
-use crossbeam_deque::{Injector, Stealer, Worker, Steal};
+// To use our wrapper function for creating files for writing to.
+use self::util::open_file;
+
+// To hold the configuration details for this DuFF run.
+use self::config::Config;
 
 
-use std::{path::Path, fs::File, io, iter};
+// Standard library stuff:
+// For file paths and such
+use std::path::{Path,PathBuf};
+
+// For writing to our output files.
+use std::io::Write;
+
+// For deduplicating we use a hashmap struct to make it a bit easier.
+use std::collections::HashMap;
+
+// To quit early if errors are detected that cannot be dealt with.
+use std::process::exit;
+
+
+// Parallelism crates:
+// For directory traversal work.
+use crossbeam_deque::{Injector, Worker};
+
+// For file examination and hash calculation
+use crossbeam::{crossbeam_channel, thread};
+
+// For use of par_iter for processing files and calculating hashes.
+use rayon::iter::{ParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
+
+
+// Progress crates:
+// For displaying progress bars and spinners to the user
+use indicatif::{ProgressBar, ProgressStyle, ProgressDrawTarget};
+
+// To update the user with helpful status messages.
+use console::{Emoji, style};
+
+// Miscellaneous crates
+// For dealing with command line arguments
 use clap::{load_yaml, App};
 
-use crossbeam::{crossbeam_channel, thread};
-use walkdir;
-use ignore;
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::time::{Duration, Instant, SystemTime};
-
-use std::process::exit;
-use rayon::iter::{ParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
-use indicatif::{ParallelProgressIterator, ProgressStyle, ProgressBar, ProgressDrawTarget};
-
-use console::{Emoji, style};
-use std::io::Write;
-use crate::util::open_file;
+// For calculating mtime
 use chrono::Utc;
-use std::path::PathBuf;
-use crate::config::Config;
 
 
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
@@ -150,7 +169,7 @@ fn main() {
                 // Start traversing those directories, grabbing another from the global queue when
                 // finished looking at the current one!
                 loop {
-                    match find_task(&mut local_q, &global_q) {
+                    match util::find_task(&mut local_q, &global_q) {
                         Some(mut job) => {
 
                             // This should be the only case - as only directories will be pushed
@@ -261,7 +280,7 @@ fn main() {
         // Run our process_file function, which will give us back a FileResult struct wrapped in a
         // Some if this file, x, is able to be processed and matches the user's requested extension
         // and file size filters.
-        match process_file(x, &conf) {
+        match util::process_file(x, &conf) {
             Some(mut fr) => {
                 tx.send(fr);
             }
@@ -466,75 +485,3 @@ fn main() {
 
 
 
-// The find_task function is "adapted" from Crossbeam's deque docs
-// [https://docs.rs/crossbeam/0.7.1/crossbeam/deque/index.html] and from Ken Sternberg's Parallel
-// Boggle Solver cited above.
-fn find_task<T>(local: &mut Worker<T>, global: &Injector<T>) -> Option<T> {
-    match local.pop() {
-        Some(job) => Some(job),
-        None => loop {
-            match global.steal() {
-                Steal::Success(job) => break Some(job),
-                Steal::Empty => break None,
-                Steal::Retry => {}
-            }
-        },
-    }
-}
-
-
-// This function does all the processing of a PathBuf. Specifically, it collects the metadata
-// (filesize and mtime) and will create a new FileResult object which it will return wrapped in a
-// Some, otherwise if this function hits an error or the path in question doesn't satisfy the
-// extension or file size requirements None is returned.
-fn process_file(curr_pb: &PathBuf, curr_conf: &Config) -> Option<file_result::FileResult> {
-
-    // Convert pathbuf to just path then try to get a string representing path
-    let curr_path = curr_pb.as_path();
-    let path_str = match curr_path.to_str() {
-        Some(u) => u,
-        None => {
-            eprintln!("Error converting path to string.");
-            return None;
-        }
-    };
-
-    let path_str = String::from(path_str);
-
-    // Attempt to get the metadata for this file so we can access m-time and file size
-    let curr_meta = match curr_path.metadata() {
-        Ok(u) => u,
-        Err(e) => {
-            eprintln!("Error collecting metadata. {}", e);
-            return None;
-        }
-    };
-
-    // Grab m-time and convert to UTC time
-    let mtime = match curr_meta.modified() {
-        Ok(u) => u,
-        Err(e) => {
-            eprintln!("Error capturing mtime for file. {}", e);
-            return None;
-        }
-    };
-
-    let mtime: chrono::DateTime<Utc> = mtime.into();
-
-    // Grab the file size
-    let fs = u128::from(curr_meta.len());
-
-    // Run our extension and size matching checks based on user's input
-    let ext_match = util::check_ext(curr_path, &curr_conf.exts);
-    let size_match = util::check_size(fs,
-                                            curr_conf.ll_size,
-                                            curr_conf.ul_size);
-
-    // As long as this file fits the user's requirements return a FileResult struct, if not just
-    // return a None.
-    if ext_match && size_match {
-        return Some(file_result::FileResult::new(path_str, fs, mtime));
-    }
-
-    return None
-}

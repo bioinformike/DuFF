@@ -5,13 +5,9 @@ mod file_result;
 // To use our wrapper function for creating files for writing to.
 use self::util::open_file;
 
-// To hold the configuration details for this DuFF run.
-use self::config::Config;
-
-
 // Standard library stuff:
 // For file paths and such
-use std::path::{Path,PathBuf};
+use std::path::PathBuf;
 
 // For writing to our output files.
 use std::io::Write;
@@ -28,7 +24,8 @@ use std::process::exit;
 use crossbeam_deque::{Injector, Worker};
 
 // For file examination and hash calculation
-use crossbeam::{crossbeam_channel, thread};
+use crossbeam_channel;
+use crossbeam_utils::thread;
 
 // For use of par_iter for processing files and calculating hashes.
 use rayon::iter::{ParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
@@ -45,10 +42,8 @@ use console::{Emoji, style};
 // For dealing with command line arguments
 use clap::{load_yaml, App};
 
-// For calculating mtime
-use chrono::Utc;
 
-
+// Different emojis that we use to show indicate what the program is doing.
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
 static FILES: Emoji = Emoji("🗃️", "");
 static ROCKET: Emoji = Emoji("🚀", "");
@@ -65,7 +60,7 @@ fn main() {
 
 
     // Get user input
-    let yams = load_yaml!("../duff_args.yml");
+    let yams = load_yaml!("duff_args.yml");
     let matches = App::from(yams).get_matches();
 
     // Process user input
@@ -80,22 +75,27 @@ fn main() {
         );
     }
 
+
+
     // Open the report file for writing
     let mut report_file = open_file(&conf.report_file, &conf.out_dir,
                                     conf.user_set_dir);
 
-    // Open the log file for writing.
-    // TODO: This should only be done if the user requested a log file.
+    // Open the log file for writing - this file is hidden if the user didn't want it and will be
+    // cleaned up.
     let mut log_file = open_file(&conf.log_file, &conf.out_dir,
-                                    conf.user_set_dir);
+                                     conf.user_set_dir);
 
     if !conf.silent {
         println!("{}", conf)
     }
 
-    // TODO: This should only be run if the user requested a log file.
     // Write out the configuration to the log file
-    writeln!(log_file, "{}", conf);
+    if conf.log {
+
+        // TODO: Replace unwrap
+        writeln!(log_file, "{}", conf).unwrap();
+    }
 
 
     // Create our channels that we will use to send the files we find during directory traversal
@@ -123,7 +123,7 @@ fn main() {
     // input directories, but from my personal experience with my use case this will be less than
     // informative as each directory I give it could take quite a long time to actually traverse.
     // Initialize the spinner out here, so the compiler won't yell at me.
-    let mut spin = ProgressBar::new_spinner();
+    let spin = ProgressBar::new_spinner();
 
     // Update some things about the spinner and get it spinning using steady tick.  We will manually
     // end the ticking after the traversal is complete.
@@ -157,7 +157,7 @@ fn main() {
     thread::scope(|scope| {
 
         // Only spool up as many jobs as the user request (defaults to 1).
-        for x in 0..conf.jobs {
+        for _x in 0..conf.jobs {
 
             // Clone our channel for each thread.
             let tx = tx.clone();
@@ -170,7 +170,7 @@ fn main() {
                 // finished looking at the current one!
                 loop {
                     match util::find_task(&mut local_q, &global_q) {
-                        Some(mut job) => {
+                        Some(job) => {
 
                             // This should be the only case - as only directories will be pushed
                             // into the global queue and then pulled down into a thread's local
@@ -207,7 +207,7 @@ fn main() {
                                             if curr_path.is_dir() {
                                                 global_q.push(curr_pb);
                                             } else {
-                                                tx.send(curr_pb);
+                                                tx.send(curr_pb).unwrap();
                                             }
                                         },
 
@@ -281,8 +281,8 @@ fn main() {
         // Some if this file, x, is able to be processed and matches the user's requested extension
         // and file size filters.
         match util::process_file(x, &conf) {
-            Some(mut fr) => {
-                tx.send(fr);
+            Some(fr) => {
+                tx.send(fr).unwrap();
             }
 
             // Totally not sure if this is the way you are supposed to handle this, but it seems to
@@ -325,7 +325,7 @@ fn main() {
 
     // Only keep an item in the hashmap if the key's (file size) corresponding value (vector of
     // FileResult structs) has at least 2 elements (dupes)
-    dict.retain(|&k, v| v.len() > 1);
+    dict.retain(|_, v| v.len() > 1);
 
     // Flatten the hashmap out in this annoying 2-step procedure for further processing. First we
     // dump all of the hashmap values (vectors of FileResult structs) into a single vector, and then
@@ -340,6 +340,7 @@ fn main() {
     // TODO: We need to handle this better, writing out logs and reports if requested, instead of just quitting.
     if n_dupes == 0 {
         println!("No duplicate files!");
+        util::clean_up(&conf);
         exit(0)
     }
 
@@ -438,6 +439,7 @@ fn main() {
     // TODO: Update this to still write out log files or whatever is needed even if no dupes
     if n_dupes == 0 {
         println!("No duplicate files!");
+        util::clean_up(&conf);
         exit(0)
     }
 
@@ -453,7 +455,6 @@ fn main() {
         );
     }
 
-    // TODO: Do we actually need this, or can we just skip to writing report?
     if !conf.hide_prog {
         println!("[{}, {}] {} Wrapping up...",
                  util::dt(),
@@ -461,6 +462,11 @@ fn main() {
                  CLAPPER,
         );
     }
+
+    // If this function becomes more than just removing a log file if the user didn't request it,
+    // we might need to move the location of this call.
+    util::clean_up(&conf);
+
 
     // Letting the user know we are writing the report and where they can find it again.
     if !conf.hide_prog {
@@ -475,10 +481,14 @@ fn main() {
     // TODO: Do we need some sort of progress indicator here? How long could this take??
     // TODO: This format is more for the hash/resume file, we need a better reporting format.
     // Write the header line
-    writeln!(report_file, "size hash mtime path");
-    for (k, v) in dict.iter() {
+
+    // TODO: Replace unwrap
+    writeln!(report_file, "size hash mtime path").unwrap();
+    for (_, v) in dict.iter() {
         for y in v.iter() {
-            writeln!(report_file, "{}", y);
+
+            // TODO: Replace unwrap
+            writeln!(report_file, "{}", y).unwrap();
         }
     }
 }

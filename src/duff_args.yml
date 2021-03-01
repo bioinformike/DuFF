@@ -1,0 +1,120 @@
+# YAML file setting up DuFF command line argument parsing using clap-rs.
+
+name: DuFF
+version: "0.7.0"
+about: "DuFF [Duplicate File Finder]: An application to find duplicate files on a filesystem. \n
+       [Report bugs at https://github.com/bioinformike/DuFF/issues]"
+author: Mike Lape <MikeLape@Gmail.com>
+
+args:
+    # Required argument(s):
+    #
+    # The directories the user wants DuFF to search for duplicate files within.
+  - dir:
+      help: Specify the directories you want to search for duplicate files as a comma separated list
+      short: d
+      long: dir
+      multiple: false
+      takes_value: true
+      required: true
+
+    # Optional flags:
+    #
+    # The archive flag tells DuFF to save the calculated hashes for future re-use.
+  - archive:
+        help: Save calculated hashes to file for a future use.
+        short: a
+        long: archive
+        multiple: false
+        takes_value: false
+
+    # The log flag tells DuFF to save a log file for future re-runs of DuFF where we can skip the
+    # directory traversal and file examination, instead jumping directly to hashing.
+  - log:
+        help: Save a log file that can be used to resume this DuFF run at a later time.
+        short: g
+        long: log
+        multiple: false
+        takes_value: false
+
+    # The prog flag tells DuFF that the user doesn't want to see progress information.
+  - prog:
+        help: Hide progress information.
+        short: p
+        long: progress
+        multiple: false
+        takes_value: false
+
+    # The silent flag tells DuFF that the user doesn't want anything put into stdout. This is pretty similar to the prog
+    # flag, but with just the prog we will still echo the DuFF configuration back to the user, but the silent flag
+    # disables this as well as all progress information.
+  - silent:
+        help: Hide all console output.
+        short: s
+        long: silent
+        multiple: false
+        takes_value: false
+
+    # Optional Arguments:
+    #
+    # lower_lim corresponds to the user set lower limit file size, defaulting to 0 B.
+  - lower_lim:
+      help: "Require files to be greater than or equal to this value for consideration [Ex: 0B, 5 MB, etc.]."
+      short: l
+      long: lowlim
+      multiple: false
+      takes_value: true
+
+    # upper_lim holds the user specified upper limit file size, defaulting to the max value of a u128
+    # 340282366920938463463374607431768211455 B or approx 340 Yottabytes.
+  - upper_lim:
+      help: "Require files to be less than or equal to this value for consideration [Ex: 5MB, 8 GB, etc.]."
+      short: u
+      long: uplim
+      multiple: false
+      takes_value: true
+
+    # jobs will hold the number of "jobs" or threads the user wants us to run DuFF with, defaulting to 1 thread.
+  - jobs:
+        help: Number of threads DuFF should utilize.
+        short: j
+        long: jobs
+        multiple: false
+        takes_value: true
+
+    # exts is a comma separated list defining the extensions that the user wants to limit the search of files to,
+    # defaulting to *.
+  - exts:
+        help: Specify file extensions you want to limit the search for as a comma separated list.
+        short: e
+        long: ext
+        multiple: false
+        takes_value: true
+
+    # out_dir will hold the directory the user wants us to write files to, defaulting to the current working directory.
+    # If we cannot write to out_dir, the program will fail, letting the user know the reason.
+  - out_dir:
+      help: Directory where output files should be stored, defaults to current working directory.
+      short: o
+      long: out
+      multiple: false
+      takes_value: true
+
+    # resume is the path to a log file from a previous DuFF run, saved using the log flag.
+  - resume:
+        help: >-
+            Path to a log file from a previous DuFF run (see 'log' option).
+            DuFF will skip directly to hash calculation, assuming
+            all duplicate files are enumerated in the input log file.
+        short: r
+        long: resume
+        multiple: false
+        takes_value: true
+
+    # hash is the path to a file containing hashes saved from a previous DuFF run using the archive flag.
+  - hash:
+      help: Path to file containing previously computed hashes that DuFF should use.
+      short: x
+      long: hash
+      multiple: false
+      takes_value: true

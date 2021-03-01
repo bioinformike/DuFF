@@ -26,12 +26,20 @@ I had originally been implementing all of this in bash, but since I wanted to le
 to use to learn it!
 
 Left to implement:
+- [ ] Archive functionality [-a flag] (saving hashes for future re-use) 
+- [ ] Ability to read in previously computed hashes [-hash arg]
+- [ ] Debug functionality (saves working file - doesn't delete) [-d flag]
+- [ ] Rename debug functionality 
+- [ ] Resume functionality (skip file size examination using user provided previous working file)
+  <br /> ```Resume should allow multiple re-entry points depending on if user wants to search dirs again or just skip 
+  to hashing... needs more thought.```
+- [ ] Saving working file if requested (file with file size data)
 - [ ] Need to deal with issues when we traverse into same directory twice.
   <br /> ```Could definitely filter baged on path in file_res, if a path isn't unique delete all but 1 FileResult 
          instance for this path.```
 - [ ] Verify DuFF pasts all tests mentioned in this rmlint blog post: https://rmlint.readthedocs.io/en/latest/cautions.html
 - [ ] Need to add output and logging.
-- [ ] Resume functionality
+
 - [ ] Add low memory mode where instead of building the tree in memory as we recursively search the dir structure in parallel we write our finds out to file. Then use that file for figuring out duplicates, never putting the entire structure in memory.
 Tests to write:
 - [ ] Add tests for extension filtering 

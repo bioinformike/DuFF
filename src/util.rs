@@ -11,8 +11,8 @@ use crate::file_result;
 // For our datetime helper functions (dt and f_dt)
 use chrono::{DateTime, Utc};
 
-// To create files for output (open_file)
-use std::fs::File;
+// To create files for output (open_file) and clean up any they don't want to keep.
+use std::fs::{File, remove_file};
 
 // Paths are taken as input to 3 functions (open_file, check_ext, process_file)
 use std::path::{Path, PathBuf};
@@ -204,4 +204,23 @@ pub fn process_file(curr_pb: &PathBuf, curr_conf: &Config) -> Option<file_result
     }
 
     return None
+}
+
+// This function does all the end of processing cleaning up.  Saving some files if the user wanted
+// them and deleting them if they didn't.
+pub fn clean_up(curr_conf: &Config)  {
+
+    // Remove the log if they never asked for a log (log bool == False)
+    if !curr_conf.log {
+        let log_path = Path::new(&curr_conf.log_file);
+
+        match remove_file(log_path) {
+            Ok(_) => {},
+            Err(e) => {
+                eprintln!("Error while trying to remove log file {}.\nError text: {}",
+                           &curr_conf.log_file, e);
+            }
+        }
+    }
+
 }

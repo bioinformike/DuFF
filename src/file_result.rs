@@ -31,7 +31,13 @@ use twox_hash::xxh3::{Hash128, HasherExt};
 #[derive(Debug, Clone,Eq)]
 pub struct FileResult {
 
-    // The full path to the file, held as a String for convenience.
+    // The actual file name, as a String
+    pub file_name : String,
+
+    // The directory path within which file_name resides, as a String
+    pub dir_path : String,
+
+    // The full path to the file, held as a String for convenience. [dir_path/file_name]
     pub file_path : String,
 
     // The size of this file as a u128 to future proof us (hopefully).
@@ -50,8 +56,9 @@ impl FileResult {
     // Simple new function, note that with how DuFF currently functions we do not have a hash when
     // the FileResult object is first created, so we set it to an empty string here. There is an
     // update_hash function below that allows us to update the hash later after we calculate it.
-    pub fn new(file_path: String, size: u128, mtime: DateTime<Utc>) -> FileResult {
-        FileResult {file_path, size, mtime, hash : String::new()}
+    pub fn new(file_name: String, dir_path: String, file_path: String, size: u128,
+               mtime: DateTime<Utc>) -> FileResult {
+        FileResult {file_name, dir_path, file_path, size, mtime, hash : String::new()}
     }
 
     // The calc_hash function does what it says its going to do, calculate a hash, specifically as
@@ -105,6 +112,7 @@ impl FileResult {
     pub fn update_hash(&mut self, hash: String)  {
         self.hash = hash;
     }
+
 }
 
 // Implement the Display Trait for easy printing of FileResult objects

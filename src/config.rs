@@ -352,14 +352,19 @@ impl Config  {
 
         // Specify the paths for our working files, we'll create them later.
         if archive {
-            archive_file = format!("{}/DuFF_{}.hash", out_dir, util::f_dt());
+
+            archive_file = format!("{}/DuFF_{}.arch", out_dir, util::f_dt());
+        } else {
+            // This is  shitty solution but I need to be able to open a log file even if they don't
+            // want it.  If they don't want it I'll leave it hidden and will clean it up.
+            archive_file = format ! ("{}/.DuFF_{}.arch", out_dir, util::f_dt());
         }
 
         if log {
 
             log_file = format!("{}/DuFF_{}.log", out_dir, util::f_dt());
         } else {
-            // This is  shitty solutionm but I need to be able to open a log file even if they don't
+            // This is  shitty solution but I need to be able to open a log file even if they don't
             // want it.  If they don't want it I'll leave it hidden and will clean it up.
             log_file = format ! ("{}/.DuFF_{}.log", out_dir, util::f_dt());
         }

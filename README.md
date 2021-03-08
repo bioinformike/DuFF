@@ -26,7 +26,8 @@ I had originally been implementing all of this in bash, but since I wanted to le
 to use to learn it!
 
 Left to implement:
-- [ ] Archive functionality [-a flag] (saving hashes for future re-use) 
+- [x] Archive functionality [-a flag] (saving hashes for future re-use)
+- [ ] Fix issue with small files showing up with size and hash of 0.
 - [ ] Ability to read in previously computed hashes [-hash arg]
 - [ ] Debug functionality (saves working file - doesn't delete) [-d flag]
 - [ ] Rename debug functionality 

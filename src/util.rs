@@ -17,8 +17,15 @@ use std::fs::{File, remove_file};
 // Paths are taken as input to 3 functions (open_file, check_ext, process_file)
 use std::path::{Path, PathBuf};
 
+// For writing out our report file.
+use std::io::Write;
+
+// For printing out report
+use std::collections::HashMap;
+
 // For the find task function
 use crossbeam_deque::{Injector, Worker, Steal};
+use crate::file_result::FileResult;
 
 
 // Extract some info from our manifest file to be used at different places for output to user.
@@ -156,8 +163,62 @@ pub fn find_task<T>(local: &mut Worker<T>, global: &Injector<T>) -> Option<T> {
 // extension or file size requirements None is returned.
 pub fn process_file(curr_pb: &PathBuf, curr_conf: &Config) -> Option<file_result::FileResult> {
 
-    // Convert pathbuf to just path then try to get a string representing path
-    let curr_path = curr_pb.as_path();
+    // Convert pathbuf to just path
+    let mut curr_path = curr_pb.as_path();
+
+    // And canonicalize the path
+    let canon_path = match curr_path.canonicalize() {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("Error canonicalizing path!\n{}", e);
+            return None;
+        }
+    };
+
+    // Extract the path version
+    curr_path = canon_path.as_path();
+
+    // Now try to extract the file name as OsStr and then convert that to actual str
+    let name_os = match curr_path.file_name() {
+        Some(u) => u,
+        None => {
+            eprintln!("Error extracting file name from path.");
+            return None;
+        }
+    };
+
+    // Convert the OsStr to str
+    let name_str = match name_os.to_str() {
+        Some(u) => u,
+        None => {
+            eprintln!("Error converting file name OsStr to str.");
+            return None;
+        }
+    };
+
+    let file_name = String::from(name_str);
+
+    // Get the path to this file
+    let dir_path = match canon_path.parent() {
+        Some(u) => u,
+        None => {
+            eprintln!("Error extracting directory path!");
+            return None;
+        }
+    };
+
+    // Capture this path as a str
+    let dir_str = match dir_path.to_str() {
+        Some(u) => u,
+        None => {
+            eprintln!("Error converting path to string.");
+            return None;
+        }
+    };
+
+    let dir_str = String::from(dir_str);
+
+    // Capture this path as a str
     let path_str = match curr_path.to_str() {
         Some(u) => u,
         None => {
@@ -200,7 +261,7 @@ pub fn process_file(curr_pb: &PathBuf, curr_conf: &Config) -> Option<file_result
     // As long as this file fits the user's requirements return a FileResult struct, if not just
     // return a None.
     if ext_match && size_match {
-        return Some(file_result::FileResult::new(path_str, fs, mtime));
+        return Some(file_result::FileResult::new(file_name, dir_str,path_str, fs, mtime));
     }
 
     return None
@@ -223,4 +284,77 @@ pub fn clean_up(curr_conf: &Config)  {
         }
     }
 
+    // Remove the archive if they never asked for an archive (archive bool == False)
+    if !curr_conf.archive {
+        let arch_path = Path::new(&curr_conf.archive_file);
+
+        match remove_file(arch_path) {
+            Ok(_) => {},
+            Err(e) => {
+                eprintln!("Error while trying to remove log file {}.\nError text: {}",
+                          &curr_conf.archive_file, e);
+            }
+        }
+    }
 }
+
+// This function writes a report file out to the file represented by rep_file. It iterates through
+// all of the duplicate files in the input dict making entries for each one.
+pub fn write_report(mut rep_file: File, mut arch_file: File, dict: HashMap<String, Vec<FileResult>>,
+                    conf: &Config) {
+
+    // TODO: Replace unwrap
+    // Write the simple header
+    writeln!(rep_file, "File Count\tDuplicate Number\tName\tPath\tFile Size\tModified Time").unwrap();
+
+
+    // We will handle the archive stuff in here too.
+    if conf.archive {
+
+        writeln!(arch_file, "Path\tfile_size\thash\tmtime");
+    }
+
+
+    // file_cnt tracks the number of unique files (files that have multiple copies)
+    let mut file_cnt = 1;
+
+    // Go through th entire dictionary
+    for (_, v) in dict.iter() {
+
+        // Create string we will build on
+        let mut out_str = String::new();
+
+        // Same as above but in archive format
+        let mut arch_str = String::new();
+
+        // dupe_cnt represents the number duplicate of current file_cnt this file is
+        let mut dupe_cnt = 1;
+
+        // Go through each vector of duplicate files
+        for y in v.iter() {
+
+            // Append information for current duplicate to our string for output
+            out_str.push_str(format!("{}\t{}\t{}\t{}\t{}\t{}\n", file_cnt, dupe_cnt,
+                                     y.file_name, y.dir_path, y.size, y.mtime).as_str());
+
+            // Append information for current duplicate to our string for output
+            arch_str.push_str(format!("{}\t{}\t{}\t{}\n", y.file_path, y.size,
+                                      y.hash, y.mtime).as_str());
+
+
+            dupe_cnt = dupe_cnt + 1;
+        }
+
+        // Write out the report entry for this unique file.
+        writeln!(rep_file, "{}", out_str);
+
+        // We will handle the archive stuff in here too.
+        if conf.archive {
+
+            writeln!(arch_file, "{}", arch_str);
+        }
+
+        file_cnt = file_cnt + 1;
+    }
+}
+

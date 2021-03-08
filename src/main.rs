@@ -78,13 +78,19 @@ fn main() {
 
 
     // Open the report file for writing
-    let mut report_file = open_file(&conf.report_file, &conf.out_dir,
+    let report_file = open_file(&conf.report_file, &conf.out_dir,
                                     conf.user_set_dir);
 
     // Open the log file for writing - this file is hidden if the user didn't want it and will be
     // cleaned up.
     let mut log_file = open_file(&conf.log_file, &conf.out_dir,
                                      conf.user_set_dir);
+
+
+    // Open the archive file for writing - this file is hidden if the user didn't want it and will
+    // be cleaned up.
+    let mut arch_file = open_file(&conf.archive_file, &conf.out_dir,
+                                 conf.user_set_dir);
 
     if !conf.silent {
         println!("{}", conf)
@@ -143,7 +149,7 @@ fn main() {
                 ])
                 .template("{prefix} {spinner:.blue}"),
         );
-        spin.set_prefix(&format!("[{}, {}] {} Traversing directories...",
+        spin.set_prefix(&format!("[{}, {}] {}  Traversing directories...",
                                  util::dt(),
                                  style("02/11").bold().dim(),
                                  FILES));
@@ -390,6 +396,9 @@ fn main() {
 
     });
 
+    // Finish off the file processing progress bar
+    pb.finish();
+
     // Slight modification of what we did above after the directory walking
     let mut dict = HashMap::new();
 
@@ -445,7 +454,7 @@ fn main() {
 
     // Let the user know how many duplicate files we found.
     if !conf.hide_prog {
-        println!("[{}, {}] {} Found {} files that have been duplicated, totaling {} duplicate \
+        println!("[{}, {}] {} Found {} unique files, and a total of {} duplicate \
                  files.",
                  util::dt(),
                  style("09/11").bold().dim(),
@@ -478,19 +487,9 @@ fn main() {
         );
     }
 
-    // TODO: Do we need some sort of progress indicator here? How long could this take??
-    // TODO: This format is more for the hash/resume file, we need a better reporting format.
-    // Write the header line
+    util::write_report(report_file, arch_file, dict, &conf);
 
-    // TODO: Replace unwrap
-    writeln!(report_file, "size hash mtime path").unwrap();
-    for (_, v) in dict.iter() {
-        for y in v.iter() {
 
-            // TODO: Replace unwrap
-            writeln!(report_file, "{}", y).unwrap();
-        }
-    }
 }
 
 

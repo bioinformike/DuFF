@@ -305,19 +305,12 @@ pub fn clean_up(curr_conf: &Config)  {
 
 // This function writes a report file out to the file represented by rep_file. It iterates through
 // all of the duplicate files in the input dict making entries for each one.
-pub fn write_report(mut rep_file: File, mut arch_file: File, dict: HashMap<String, Vec<FileResult>>,
+pub fn write_report(mut rep_file: File, dict: HashMap<String, Vec<FileResult>>,
                     conf: &Config) {
 
     // TODO: Replace unwrap
     // Write the simple header
     writeln!(rep_file, "File Count\tDuplicate Number\tName\tPath\tFile Size\tModified Time").unwrap();
-
-
-    // We will handle the archive stuff in here too.
-    if conf.archive {
-
-        writeln!(arch_file, "Path\tfile_size\thash\tmtime");
-    }
 
 
     // file_cnt tracks the number of unique files (files that have multiple copies)
@@ -342,10 +335,6 @@ pub fn write_report(mut rep_file: File, mut arch_file: File, dict: HashMap<Strin
             out_str.push_str(format!("{}\t{}\t{}\t{}\t{}\t{}\n", file_cnt, dupe_cnt,
                                      y.file_name, y.dir_path, y.size, y.mtime).as_str());
 
-            // Append information for current duplicate to our string for output
-            arch_str.push_str(format!("{}\t{}\t{}\t{}\n", y.file_path, y.size,
-                                      y.hash, y.mtime).as_str());
-
 
             dupe_cnt = dupe_cnt + 1;
         }
@@ -353,11 +342,6 @@ pub fn write_report(mut rep_file: File, mut arch_file: File, dict: HashMap<Strin
         // Write out the report entry for this unique file.
         writeln!(rep_file, "{}", out_str);
 
-        // We will handle the archive stuff in here too.
-        if conf.archive {
-
-            writeln!(arch_file, "{}", arch_str);
-        }
 
         file_cnt = file_cnt + 1;
     }

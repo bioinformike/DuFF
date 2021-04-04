@@ -27,7 +27,8 @@ to use to learn it!
 
 Left to implement:
 - [x] Archive functionality [-a flag] (saving hashes for future re-use)
-- [ ] Fix issue with small files showing up with size and hash of 0.
+- [x] Fix issue with small files showing up with size and hash of 0.
+  <br /> ```Dropping any files of size 0```
 - [ ] Ability to read in previously computed hashes [-hash arg]
 - [ ] Debug functionality (saves working file - doesn't delete) [-d flag]
 - [ ] Rename debug functionality 

@@ -75,7 +75,9 @@ fn main() {
         );
     }
 
+    // Setup the rayon threadpool which we will use later
 
+    rayon::ThreadPoolBuilder::new().num_threads(conf.jobs as usize).build_global().unwrap();
 
     // Open the report file for writing
     let report_file = open_file(&conf.report_file, &conf.out_dir,

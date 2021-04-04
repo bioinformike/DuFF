@@ -252,6 +252,11 @@ pub fn process_file(curr_pb: &PathBuf, curr_conf: &Config) -> Option<file_result
     // Grab the file size
     let fs = u128::from(curr_meta.len());
 
+    // Skip files of size 0
+    if fs == 0 {
+        return None
+    }
+
     // Run our extension and size matching checks based on user's input
     let ext_match = check_ext(curr_path, &curr_conf.exts);
     let size_match = check_size(fs,

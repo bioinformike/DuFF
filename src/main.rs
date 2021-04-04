@@ -10,7 +10,7 @@ use self::util::open_file;
 use std::path::PathBuf;
 
 // For writing to our output files.
-use std::io::Write;
+use std::io::{Write, BufReader, BufRead};
 
 // For deduplicating we use a hashmap struct to make it a bit easier.
 use std::collections::HashMap;
@@ -41,7 +41,9 @@ use console::{Emoji, style};
 // Miscellaneous crates
 // For dealing with command line arguments
 use clap::{load_yaml, App};
-
+use std::fs::File;
+use serde_json::from_str;
+use crate::file_result::FileResult;
 
 // Different emojis that we use to show indicate what the program is doing.
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
@@ -76,7 +78,6 @@ fn main() {
     }
 
     // Setup the rayon threadpool which we will use later
-
     rayon::ThreadPoolBuilder::new().num_threads(conf.jobs as usize).build_global().unwrap();
 
     // Open the report file for writing
@@ -94,6 +95,10 @@ fn main() {
     let mut arch_file = open_file(&conf.archive_file, &conf.out_dir,
                                  conf.user_set_dir);
 
+    // Create dictionary for hashes from previous run.
+    let mut prev_dict: HashMap<u128, Vec<FileResult>> = HashMap::new();
+
+
     if !conf.silent {
         println!("{}", conf)
     }
@@ -102,7 +107,53 @@ fn main() {
     if conf.log {
 
         // TODO: Replace unwrap
-        writeln!(log_file, "{}", conf).unwrap();
+        writeln!(log_file, "#Config\n{}\n#Starting file search\n", conf).unwrap();
+    }
+
+
+    // Logic to handle a resuming of previous DuFF run using log file from that run
+    if conf.resume {
+
+    }
+
+    // Logic to handle hash file from previous DuFF run
+    if conf.have_hash {
+        let prev_hash_file = match File::open(&conf.prev_hash_file) {
+            Ok(t) => t,
+            Err(e) => {
+
+                // If we can't read the file kill the program
+                eprintln!("[Error Reading previous hash file] {}", e);
+                println!("Error reading input previous hash file {}. \nPlease fix and try to re-run \
+                        or re-run without using this file.", &conf.prev_hash_file);
+                exit(1)
+
+            }
+        };
+
+        let hash_reader = BufReader::new(prev_hash_file);
+
+        for line in hash_reader.lines() {
+            let curr_line = match line {
+                Ok(t) => t,
+                Err(e) => continue
+            };
+
+            let curr_obj: FileResult = match serde_json::from_str(&curr_line) {
+                Ok(t) => t,
+
+                Err(e) => {
+                    // Error reading line, just skip to next
+                    continue
+
+                }
+            };
+
+            //let fs: u128 = t.size;
+            // Thanks to this SO answer: https://stackoverflow.com/a/33243862
+            prev_dict.entry(curr_obj.size).or_insert(Vec::new()).push(curr_obj);
+        }
+
     }
 
 
@@ -290,6 +341,21 @@ fn main() {
         // and file size filters.
         match util::process_file(x, &conf) {
             Some(fr) => {
+
+                // If the user wants the log, start logging the files
+                if conf.log {
+                    match serde_json::to_string(&fr) {
+                        Ok(t) => {
+                            writeln!(&log_file, "{}", t).unwrap();
+                        }
+
+                        Err(e) => {
+                            eprintln!("[Serialization error] {}", e);
+                        }
+                    }
+
+
+                }
                 tx.send(fr).unwrap();
             }
 
@@ -385,6 +451,12 @@ fn main() {
     let (tx, rx) =
         crossbeam_channel::unbounded::<file_result::FileResult>();
 
+    if conf.log {
+
+        // TODO: Replace unwrap
+        writeln!(log_file, "#Starting hashing\n").unwrap();
+    }
+
     // Iterate through all FileResult structs in flat using the calc_hash function
     // to calculate a hash, and shove the updated FileResult struct down tx. NB the calc_hash
     // function updates the internal struct hash value.
@@ -392,7 +464,59 @@ fn main() {
 
         pb.inc(1);
 
-        x.calc_hash(buff_size);
+        // Indicator to tell downstream code if we found a hash match for this file.
+        let mut hash_match_found = false;
+
+        // If we have a user input hash file we should check that first before hashing
+        if conf.archive {
+
+            match  prev_dict.get(&x.size) {
+                Some(t) => {
+
+                    for y in t {
+                        let f_path = &y.file_path;
+                        let f_hash = &y.hash;
+                        let m_time = &y.mtime;
+
+                        // If we have a file match (by size - key, path, and same mtime) grab it's hash
+                        if ((f_path == &x.file_path) & (m_time == &x.mtime)) {
+                            hash_match_found = true;
+                            x.update_hash(f_hash.to_string());
+                            break
+                        }
+
+
+                    }
+                }
+                None =>  (),
+            };
+
+
+        }
+
+        // If we weren't able to find a match for this file then just calculate the hash as normal.
+        if !hash_match_found {
+            x.calc_hash(buff_size);
+        }
+
+        // If the user wants the log, start logging the files
+        if conf.log | conf.archive {
+            match serde_json::to_string(&x) {
+                Ok(t) => {
+                    if conf.log {
+                        writeln!(&log_file, "{}", t).unwrap();
+                    }
+                    if conf.archive {
+                        writeln!(&arch_file, "{}", t).unwrap();
+                    }
+                }
+
+                Err(e) => {
+                    eprintln!("[Serialization error] {}", e);
+                }
+            }
+        }
+
 
         tx.send(x.to_owned()).unwrap();
 
@@ -489,7 +613,7 @@ fn main() {
         );
     }
 
-    util::write_report(report_file, arch_file, dict, &conf);
+    util::write_report(report_file, dict, &conf);
 
 
 }

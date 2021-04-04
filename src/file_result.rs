@@ -23,12 +23,13 @@ use std::hash::Hasher;
 // For XX3_128 bit hashing.
 use twox_hash::xxh3::{Hash128, HasherExt};
 
-
+// For serializing and deserializing FileResult objects
+use serde::{Serialize, Deserialize};
 
 // The FileResult struct will hold information for each file of potential interest to us.  A struct
 // will only be created if the file represented by the file_path meets both any user specified lower
 // or upper file size limit and any user specified extension requirements.
-#[derive(Debug, Clone,Eq)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub struct FileResult {
 
     // The actual file name, as a String
@@ -113,6 +114,7 @@ impl FileResult {
         self.hash = hash;
     }
 
+
 }
 
 // Implement the Display Trait for easy printing of FileResult objects
@@ -123,6 +125,7 @@ impl fmt::Display for FileResult {
         write!(f, "{} {} {} {}", self.size, self.hash, self.mtime, self.file_path)
     }
 }
+
 
 // Implementing Ord, PartialOrd, and PartialEq for the FileResult struct to be used when inserting
 // them into hashmaps. This is "adapted" from SO answer: https://stackoverflow.com/a/29884582 and

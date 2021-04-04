@@ -30,7 +30,7 @@ cargo install duff
 
 ### Required Parameters
 The only required argument is where we should search for duplicate files.
-* -d [--dir]: The directories you want to search for duplicate files as a comma separated list
+* -d [--dir]: The directories you want to search for duplicate files as a comma separated list    
            Ex: -d /home/mike/Desktop,/home/rufus
 
 ### Optional Parameters

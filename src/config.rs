@@ -155,7 +155,7 @@ impl Config  {
         let mut exts: Vec<String> = vec![String::from("*")];
 
         // out_dir needs to be mentioned up here for the compiler to be happy.
-        let out_dir;
+        let mut out_dir;
 
         // Files from previous work - initialize to empty strings, we use bools to tell DuFF whether
         // to try to open these for writing.
@@ -326,6 +326,18 @@ impl Config  {
             out_dir = String::from(cwd.to_str().unwrap());
         }
 
+        // Determine if the output directory path has a trailing / and if so remove it.
+
+        match out_dir.chars().last() {
+            Some(t) => {
+                if t.to_string() == "/" {
+                    out_dir.pop();
+                }
+            }
+            _ => {}
+        }
+
+
 
         // If they want us to resume then they need to give us a log file from a previous DuFF run,
         // which we will just take as a string, but should probably do some checks on.
@@ -450,9 +462,20 @@ impl fmt::Display for Config {
         out_str.push_str(format!("{:<40} {:>1}\n", "Number of Threads:", self.jobs).as_str());
         out_str.push_str(format!("{:<40} {:>1}\n", "Output Directory:", self.out_dir).as_str());
         out_str.push_str(format!("{:<40} {:>1}\n", "Final Report:", self.report_file).as_str());
-        out_str.push_str(format!("{:<40} {:>1}\n", "Save Hashes:", self.archive).as_str());
-        out_str.push_str(format!("{:<40} {:>1}\n", "Save Log:", self.log).as_str());
 
+        if self.archive {
+            out_str.push_str(format!("{:<40} {:>1}\n", "Save Hashes:", self.archive_file).as_str());
+
+        } else {
+            out_str.push_str(format!("{:<40} {:>1}\n", "Save Hashes:", self.archive).as_str());
+        }
+
+        if self.log {
+            out_str.push_str(format!("{:<40} {:>1}\n", "Save Log:", self.log_file).as_str());
+
+        } else {
+            out_str.push_str(format!("{:<40} {:>1}\n", "Save Log:", self.log).as_str());
+        }
 
         if self.hide_prog == true {
             out_str.push_str(format!("{:<40} {:>1}\n", "Hide Progress:", self.hide_prog)

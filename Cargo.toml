@@ -21,6 +21,7 @@ clap = { version = "^2", features = ["yaml", "wrap_help"] }
 chrono = {version = "^0", features = ['serde'] }
 serde = { version = "^1", features = ["derive"] }
 serde_json = "^1"
+shh = "^1"
 
 # I/O and Progress
 indicatif = {version = "^0", features = ["rayon"]}
@@ -35,3 +36,4 @@ twox-hash= "^1"
 [dev-dependencies]
 assert_cmd = "0.10"
 predicates = "1"
+ntest ="*"

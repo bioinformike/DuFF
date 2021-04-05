@@ -49,6 +49,11 @@ pub struct Config {
     // configuration back to the user, but the silent flag disables this.
     pub silent : bool,
 
+    // The hide_err flag tells DuFF that the user doesn't want any eprintln! call displaying text on
+    // stdout, which it shouldn't anyways, but it does.  Turning on this flag will essentially pipe
+    // stderr to /dev/null
+    pub hide_err : bool,
+
 
     // Optional Arguments:
 
@@ -137,6 +142,7 @@ impl Config  {
         let mut log = false;
         let mut hide_prog = false;
         let mut silent = false;
+        let mut hide_err = false;
 
         // Optional Arguments:
 
@@ -163,7 +169,7 @@ impl Config  {
         let mut prev_hash_file = String::from("");
 
         // INTERNAL ARGUMENTS:
-        let mut archive_file = String::from("");
+        let archive_file;
         let log_file;
 
         // INTERNAL FLAGS:
@@ -237,6 +243,10 @@ impl Config  {
             hide_prog = true;
         }
 
+        if in_args.is_present("hide_err") {
+            hide_err = true;
+
+        }
 
         // Optional Arguments:
 
@@ -395,6 +405,7 @@ impl Config  {
             log: log,
             hide_prog: hide_prog,
             silent: silent,
+            hide_err: hide_err,
 
             // Optional Arguments:
             ll_size: ll_size,

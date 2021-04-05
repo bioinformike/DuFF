@@ -1,3 +1,6 @@
+// I sometimes use extra parens to make thing more readable to me
+#![allow(unused_parens)]
+
 mod util;
 mod config;
 mod file_result;
@@ -42,8 +45,8 @@ use console::{Emoji, style};
 // For dealing with command line arguments
 use clap::{load_yaml, App};
 use std::fs::File;
-use serde_json::from_str;
-use crate::file_result::FileResult;
+use shh;
+
 
 // Different emojis that we use to show indicate what the program is doing.
 static LOOKING_GLASS: Emoji = Emoji("🔍", "");
@@ -77,6 +80,13 @@ fn main() {
         );
     }
 
+    // Setup shh to drop all stderr warnings if that's what the user wants
+    let shh = shh::stderr().unwrap();
+
+    if !conf.hide_err {
+        drop(shh);
+    }
+
     // Setup the rayon threadpool which we will use later
     rayon::ThreadPoolBuilder::new().num_threads(conf.jobs as usize).build_global().unwrap();
 
@@ -92,11 +102,11 @@ fn main() {
 
     // Open the archive file for writing - this file is hidden if the user didn't want it and will
     // be cleaned up.
-    let mut arch_file = open_file(&conf.archive_file, &conf.out_dir,
+    let arch_file = open_file(&conf.archive_file, &conf.out_dir,
                                  conf.user_set_dir);
 
     // Create dictionary for hashes from previous run.
-    let mut prev_dict: HashMap<u128, Vec<FileResult>> = HashMap::new();
+    let mut prev_dict: HashMap<u128, Vec<file_result::FileResult>> = HashMap::new();
 
 
     if !conf.silent {
@@ -136,13 +146,13 @@ fn main() {
         for line in hash_reader.lines() {
             let curr_line = match line {
                 Ok(t) => t,
-                Err(e) => continue
+                Err(_) => continue
             };
 
-            let curr_obj: FileResult = match serde_json::from_str(&curr_line) {
+            let curr_obj: file_result::FileResult = match serde_json::from_str(&curr_line) {
                 Ok(t) => t,
 
-                Err(e) => {
+                Err(_) => {
                     // Error reading line, just skip to next
                     continue
 
@@ -613,7 +623,7 @@ fn main() {
         );
     }
 
-    util::write_report(report_file, dict, &conf);
+    util::write_report(report_file, dict);
 
 
 }

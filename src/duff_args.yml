@@ -55,6 +55,19 @@ args:
         multiple: false
         takes_value: false
 
+    # The suppress error flag tells DuFF that the user doesn't want anything put into stderr. It is very helpful when
+    # running in areas where you might not have permissions on all the files and for some reason eprintln! will print to
+    # stderr instead of stdout.  You can also get this same functionality by just redirecting stderr in bash to
+    # /dev/null, ./duff -d /tmp/ 2> /dev/null
+  - hide_err:
+      help: Hide all error messages.
+      short: h
+      long: hide_err
+      multiple: false
+      takes_value: false
+
+
+
     # Optional Arguments:
     #
     # lower_lim corresponds to the user set lower limit file size, defaulting to 0 B.

@@ -305,8 +305,7 @@ pub fn clean_up(curr_conf: &Config)  {
 
 // This function writes a report file out to the file represented by rep_file. It iterates through
 // all of the duplicate files in the input dict making entries for each one.
-pub fn write_report(mut rep_file: File, dict: HashMap<String, Vec<FileResult>>,
-                    conf: &Config) {
+pub fn write_report(mut rep_file: File, dict: HashMap<String, Vec<FileResult>>) {
 
     // TODO: Replace unwrap
     // Write the simple header
@@ -322,8 +321,6 @@ pub fn write_report(mut rep_file: File, dict: HashMap<String, Vec<FileResult>>,
         // Create string we will build on
         let mut out_str = String::new();
 
-        // Same as above but in archive format
-        let mut arch_str = String::new();
 
         // dupe_cnt represents the number duplicate of current file_cnt this file is
         let mut dupe_cnt = 1;
@@ -340,7 +337,7 @@ pub fn write_report(mut rep_file: File, dict: HashMap<String, Vec<FileResult>>,
         }
 
         // Write out the report entry for this unique file.
-        writeln!(rep_file, "{}", out_str);
+        writeln!(rep_file, "{}", out_str).unwrap();
 
 
         file_cnt = file_cnt + 1;

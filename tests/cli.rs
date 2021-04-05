@@ -2,6 +2,11 @@ use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
 use std::path::PathBuf;
+use glob::glob;
+use std::io::{BufReader, BufRead};
+use std::fs::File;
+use std::path::Path;
+use std::fs;
 // Not currently functional, so not spending time documenting right now.
 
 // Search dir tests
@@ -53,7 +58,7 @@ fn ext_filtering() -> Result<(), Box<dyn std::error::Error>> {
     d.push("tests/data/ext_test");
 
     let mut out = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    out.push("tests/outputs/");
+    out.push("tests/outputs/ext_test");
 
     cmd.arg("-d")
         .arg(d)
@@ -63,8 +68,38 @@ fn ext_filtering() -> Result<(), Box<dyn std::error::Error>> {
         .arg(".a");
 
     cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("test_ext.a"));
+        .success();
+
+    // Find the report file
+    for entry in glob("{}*.report") {
+        match entry {
+            Ok(path) => {
+                println!("{}", path.display());
+                let file_content = fs::read_to_string(path).expect("...");
+                println!("Content: {}", file_content);
+            }
+            Err(e) => {
+                // handle error
+            }
+        }
+
+        let rep_file_path = Path::new(entry.to_str());
+        let rep_file = match File::open(rep_file_path) {
+                Ok(t) => t,
+                Err(_) => {
+                    Err(())
+                }
+            };
+
+            let rep_reader = BufReader::new(rep_file);
+
+            for line in rep_reader.lines() {
+                let curr_line = match line {
+                    Ok(t) => t,
+                    Err(_) => continue
+                };
+            }
+    }
 
     Ok(())
 }

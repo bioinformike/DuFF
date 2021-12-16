@@ -10,3 +10,4 @@
 */*.report
 */*.temp
 */*.working
+/tests/test_data/*

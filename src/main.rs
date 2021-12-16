@@ -21,7 +21,6 @@ use std::collections::HashMap;
 // To quit early if errors are detected that cannot be dealt with.
 use std::process::exit;
 
-
 // Parallelism crates:
 // For directory traversal work.
 use crossbeam_deque::{Injector, Worker};
@@ -425,6 +424,7 @@ fn main() {
     if n_dupes == 0 {
         println!("No duplicate files!");
         util::clean_up(&conf);
+        util::write_report(report_file, dict);
         exit(0)
     }
 
@@ -585,6 +585,7 @@ fn main() {
     if n_dupes == 0 {
         println!("No duplicate files!");
         util::clean_up(&conf);
+        util::write_report(report_file, dict);
         exit(0)
     }
 

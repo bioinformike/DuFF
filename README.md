@@ -1,3 +1,9 @@
+
+# Project Archival
+This project was used to learn Rust and I am now archiving it because I don't have the time to continue working on it. The real-world performance of the latest version of DuFF on our lab's storage [100's of TBs] was sub-par with the internal data structures requiring a significant amount of RAM.
+
+[fclones](https://github.com/pkolaczk/fclones) seems like a much more mature duplicate file finder, so it is likely a good alternative.
+
 #  DuFF [Duplicate File Finder] 
 
 ## About 
